@@ -103,11 +103,11 @@ export const tableLayout = {
   // TUNING: core table feel. Gravity and friction control table speed and ball slowdown.
   tuning: {
     gravity: 1.08,
-    ballBounce: 0.69,
+    ballBounce: 0.71,
     ballFriction: 0.002,
-    ballFrictionAir: 0.0016,
-    wallBounce: 0.4,
-    rubberBounce: 0.93,
+    ballFrictionAir: 0.0014,
+    wallBounce: 0.42,
+    rubberBounce: 0.96,
     // TUNING: bumperBounce and bumperForce control pop-bumper rebound and added kick.
     bumperBounce: 1.12,
     bumperForce: 0.074,
@@ -115,11 +115,11 @@ export const tableLayout = {
     slingForceScale: 0.064,
     // TUNING: flipper angles/speeds/impulse control shot power, timing, and return feel.
     flipperRestAngle: { left: -16, right: 196 },
-    flipperActiveAngle: { left: -72, right: 252 },
-    flipperSpeed: 0.58,
-    flipperReturnSpeed: 0.32,
-    flipperImpulse: 17.2,
-    flipperContactRadius: 36,
+    flipperActiveAngle: { left: -76, right: 256 },
+    flipperSpeed: 0.64,
+    flipperReturnSpeed: 0.34,
+    flipperImpulse: 19.8,
+    flipperContactRadius: 40,
     flipperImpulseCooldownMs: 72,
     // TUNING: plungerForce is max launch velocity; shooterExit values control lane feed into play.
     plungerTapForce: 23,
@@ -196,9 +196,9 @@ export const tableLayout = {
 
     // RAMP MOUTHS: simple open guides that feed the ball back toward the middle.
     { id: 'left-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 242, y: 846 }, to: { x: 406, y: 756 }, thickness: 22 },
-    { id: 'left-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 316, y: 956 }, to: { x: 476, y: 828 }, thickness: 18 },
+    { id: 'left-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 316, y: 956 }, to: { x: 456, y: 828 }, thickness: 14 },
     { id: 'right-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 660, y: 775 }, to: { x: 786, y: 850 }, thickness: 18 },
-    { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 594, y: 852 }, to: { x: 714, y: 954 }, thickness: 16 },
+    { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 624, y: 852 }, to: { x: 714, y: 954 }, thickness: 14 },
     { id: 'rightTrapFixGuide', kind: 'orbit', from: { x: 885, y: 415 }, to: { x: 742, y: 548 }, thickness: 18 },
 
     // LOWER PLAYFIELD: inlanes feed flippers; outlanes and the widened middle gap drain cleanly.
@@ -227,6 +227,8 @@ export const tableLayout = {
     { id: 'right-sling-post', kind: 'post', x: 786, y: 1514, radius: 17 },
     { id: 'left-flipper-return-post', kind: 'post', x: 292, y: 1684, radius: 14 },
     { id: 'right-flipper-return-post', kind: 'post', x: 788, y: 1684, radius: 14 },
+    { id: 'left-outlane-save-post', kind: 'outlane', x: 238, y: 1288, radius: 15 },
+    { id: 'right-outlane-save-post', kind: 'outlane', x: 842, y: 1288, radius: 15 },
     { id: 'plunger-feed-post', kind: 'plungerLane', x: 928, y: 332, radius: 14 },
   ] satisfies RoundedPost[],
 
@@ -245,7 +247,7 @@ export const tableLayout = {
       height: shooterExitHeight,
     },
     // TEMPLE JACKPOT: move this gate sensor to tune the center jackpot shot.
-    { id: 'temple-jackpot', kind: 'jackpot', x: 540, y: 365, width: 150, height: 88, score: 10000 },
+    { id: 'temple-jackpot', kind: 'jackpot', x: 540, y: 365, width: 190, height: 100, score: 10000 },
     // UPPER ROLLOVERS: five lane sensors under the temple gate.
     { id: 'rollover-1', kind: 'rollover', x: 380, y: 760, width: 54, height: 78, score: 1000 },
     { id: 'rollover-2', kind: 'rollover', x: 460, y: 760, width: 54, height: 78, score: 1000 },
@@ -309,13 +311,13 @@ export const tableLayout = {
   flippers: [
     {
       id: 'left',
-      pivot: { x: 330, y: 1675 },
+      pivot: { x: 345, y: 1675 },
       length: 150,
       width: 30,
     },
     {
       id: 'right',
-      pivot: { x: 750, y: 1675 },
+      pivot: { x: 735, y: 1675 },
       length: 150,
       width: 30,
     },
