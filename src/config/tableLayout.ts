@@ -102,8 +102,8 @@ export const tableLayout = {
     bumperForce: 0.066,
     slingForceScale: 0.06,
     // TUNING: left/right flipper angles are degrees in the 1080x1920 table coordinate space.
-    flipperRestAngle: { left: -22, right: 202 },
-    flipperActiveAngle: { left: -74, right: 254 },
+    flipperRestAngle: { left: -16, right: 196 },
+    flipperActiveAngle: { left: -70, right: 250 },
     flipperSpeed: 0.52,
     flipperReturnSpeed: 0.26,
     flipperImpulse: 15.5,
@@ -163,40 +163,40 @@ export const tableLayout = {
     { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 594, y: 852 }, to: { x: 714, y: 954 }, thickness: 16 },
     { id: 'rightTrapFixGuide', kind: 'orbit', from: { x: 885, y: 415 }, to: { x: 742, y: 548 }, thickness: 18 },
 
-    // LOWER PLAYFIELD: inlanes, outlanes, apron, and drain gap. Keep the center gap clear.
-    { id: 'left-outlane-outer', kind: 'outlane', from: { x: 108, y: 1288 }, to: { x: 145, y: 1732 }, thickness: 20 },
-    { id: 'left-outlane-inner', kind: 'outlane', from: { x: 246, y: 1312 }, to: { x: 208, y: 1668 }, thickness: 20 },
-    { id: 'right-outlane-inner', kind: 'outlane', from: { x: 834, y: 1312 }, to: { x: 872, y: 1668 }, thickness: 20 },
-    { id: 'right-outlane-outer', kind: 'outlane', from: { x: 972, y: 1288 }, to: { x: 935, y: 1732 }, thickness: 20 },
-    { id: 'left-inlane', kind: 'inlane', from: { x: 276, y: 1402 }, to: { x: 392, y: 1602 }, thickness: 22 },
-    { id: 'right-inlane', kind: 'inlane', from: { x: 804, y: 1402 }, to: { x: 688, y: 1602 }, thickness: 22 },
-    { id: 'left-apron', kind: 'apron', from: { x: 116, y: 1816 }, to: { x: 350, y: 1700 }, thickness: 32 },
-    { id: 'right-apron', kind: 'apron', from: { x: 964, y: 1816 }, to: { x: 730, y: 1700 }, thickness: 32 },
+    // LOWER PLAYFIELD: inlanes feed flippers; outlanes and the widened middle gap drain cleanly.
+    { id: 'left-outlane-outer', kind: 'outlane', from: { x: 108, y: 1288 }, to: { x: 145, y: 1800 }, thickness: 20 },
+    { id: 'left-outlane-inner', kind: 'outlane', from: { x: 248, y: 1312 }, to: { x: 220, y: 1740 }, thickness: 20 },
+    { id: 'right-outlane-inner', kind: 'outlane', from: { x: 832, y: 1312 }, to: { x: 860, y: 1740 }, thickness: 20 },
+    { id: 'right-outlane-outer', kind: 'outlane', from: { x: 972, y: 1288 }, to: { x: 940, y: 1600 }, thickness: 18 },
+    { id: 'left-inlane', kind: 'inlane', from: { x: 260, y: 1390 }, to: { x: 330, y: 1604 }, thickness: 22 },
+    { id: 'right-inlane', kind: 'inlane', from: { x: 820, y: 1390 }, to: { x: 750, y: 1604 }, thickness: 22 },
+    { id: 'left-apron', kind: 'apron', from: { x: 106, y: 1840 }, to: { x: 280, y: 1730 }, thickness: 30 },
+    { id: 'right-apron', kind: 'apron', from: { x: 974, y: 1840 }, to: { x: 800, y: 1730 }, thickness: 30 },
 
     // PLUNGER LANE: rails stay intact below the exit; the top exit is open so the sensor can feed into play.
     { id: 'plunger-left-rail', kind: 'plungerLane', from: { x: 924, y: 500 }, to: { x: 924, y: 1820 }, thickness: 18 },
     { id: 'plunger-right-rail', kind: 'plungerLane', from: { x: 1062, y: 225 }, to: { x: 1062, y: 1845 }, thickness: 26 },
     { id: 'plunger-bottom-stop', kind: 'plungerLane', from: { x: 930, y: 1844 }, to: { x: 1060, y: 1844 }, thickness: 24 },
-    { id: 'left-flipper-under-guide', kind: 'apron', from: { x: 300, y: 1776 }, to: { x: 454, y: 1718 }, thickness: 24 },
-    { id: 'right-flipper-under-guide', kind: 'apron', from: { x: 780, y: 1776 }, to: { x: 626, y: 1718 }, thickness: 24 },
   ] satisfies WallSegment[],
 
   // ROUNDED POSTS: reduce sharp-corner traps around slings, lane entrances, and ramp mouths.
   posts: [
     { id: 'left-ramp-mouth-post', kind: 'rampEntrance', x: 476, y: 828, radius: 16 },
     { id: 'right-ramp-mouth-post', kind: 'rampEntrance', x: 604, y: 828, radius: 16 },
-    { id: 'left-inlane-post', kind: 'inlane', x: 392, y: 1602, radius: 18 },
-    { id: 'right-inlane-post', kind: 'inlane', x: 688, y: 1602, radius: 18 },
+    { id: 'left-inlane-post', kind: 'inlane', x: 330, y: 1604, radius: 18 },
+    { id: 'right-inlane-post', kind: 'inlane', x: 750, y: 1604, radius: 18 },
     { id: 'left-sling-post', kind: 'post', x: 294, y: 1514, radius: 17 },
     { id: 'right-sling-post', kind: 'post', x: 786, y: 1514, radius: 17 },
-    { id: 'left-flipper-return-post', kind: 'post', x: 345, y: 1682, radius: 14 },
-    { id: 'right-flipper-return-post', kind: 'post', x: 735, y: 1682, radius: 14 },
+    { id: 'left-flipper-return-post', kind: 'post', x: 292, y: 1684, radius: 14 },
+    { id: 'right-flipper-return-post', kind: 'post', x: 788, y: 1684, radius: 14 },
     { id: 'plunger-feed-post', kind: 'plungerLane', x: 928, y: 332, radius: 14 },
   ] satisfies RoundedPost[],
 
   // SENSORS: drain and simple target banks. Sensors score or reset without adding visible art.
   sensors: [
-    { id: 'drain', kind: 'drain', x: 540, y: 1878, width: 270, height: 48 },
+    { id: 'drain', kind: 'drain', x: 540, y: 1790, width: 190, height: 150 },
+    { id: 'left-outlane-drain', kind: 'drain', x: 182, y: 1780, width: 100, height: 210 },
+    { id: 'right-outlane-drain', kind: 'drain', x: 890, y: 1780, width: 90, height: 210 },
     { id: 'plunger-ready', kind: 'plungerReady', x: 1000, y: 1718, width: 108, height: 250 },
     {
       id: 'shooterExitSensor',
@@ -242,14 +242,14 @@ export const tableLayout = {
   flippers: [
     {
       id: 'left',
-      pivot: { x: 382, y: 1678 },
-      length: 158,
+      pivot: { x: 330, y: 1675 },
+      length: 150,
       width: 30,
     },
     {
       id: 'right',
-      pivot: { x: 698, y: 1678 },
-      length: 158,
+      pivot: { x: 750, y: 1675 },
+      length: 150,
       width: 30,
     },
   ] satisfies FlipperConfig[],
