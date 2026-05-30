@@ -3,32 +3,42 @@ export type Point = {
   y: number
 }
 
-export type SegmentBody = {
+export type SegmentKind =
+  | 'wall'
+  | 'orbit'
+  | 'rampEntrance'
+  | 'inlane'
+  | 'outlane'
+  | 'apron'
+  | 'plungerLane'
+  | 'targetBank'
+
+export type WallSegment = {
   id: string
-  kind:
-    | 'wall'
-    | 'inlane'
-    | 'outlane'
-    | 'orbit'
-    | 'rampEntrance'
-    | 'plungerLane'
-    | 'targetBank'
-    | 'bumperNest'
+  kind: SegmentKind
   from: Point
   to: Point
   thickness: number
   restitution?: number
 }
 
-export type RectBody = {
+export type RoundedPost = {
   id: string
-  kind: 'targetBank' | 'drain' | 'plungerLane'
+  kind: SegmentKind | 'post'
+  x: number
+  y: number
+  radius: number
+  restitution?: number
+}
+
+export type SensorBody = {
+  id: string
+  kind: 'drain' | 'targetBank' | 'plungerReady'
   x: number
   y: number
   width: number
   height: number
   angle?: number
-  isSensor?: boolean
   score?: number
 }
 
@@ -59,129 +69,155 @@ export type FlipperConfig = {
 }
 
 export const tableLayout = {
+  // All playable coordinates use a clean 1080x1920 table space. The 941x1672
+  // blockout image is scaled to this space by the scene.
   table: {
-    width: 941,
-    height: 1672,
+    width: 1080,
+    height: 1920,
     backgroundPath: '/assets/playfield/neon-aztec-blockout.png',
+    backgroundAlpha: 0.62,
   },
 
   physics: {
-    gravityY: 1.15,
-    solverIterations: 8,
+    gravityY: 1.08,
+    solverIterations: 12,
   },
 
-  // TUNING: gameplay force and bounce constants live here so table feel can be adjusted quickly.
+  // TUNING: table feel. Start here for broad gameplay changes before moving coordinates.
   tuning: {
-    ballBounce: 0.68,
-    wallBounce: 0.28,
-    rubberBounce: 0.82,
-    bumperForce: 0.064,
-    slingForceScale: 0.054,
-    flipperStrength: 0.34,
-    flipperMaxAngularVelocity: 0.58,
-    plungerMaxForce: 0.095,
-    plungerChargeRate: 0.018,
-    nudgeFromFlipperContact: 0.03,
+    ballBounce: 0.62,
+    ballFriction: 0.0025,
+    ballFrictionAir: 0.0024,
+    wallBounce: 0.32,
+    rubberBounce: 0.88,
+    bumperBounce: 1.08,
+    bumperForce: 0.066,
+    slingForceScale: 0.06,
+    flipperUpSpeed: 0.42,
+    flipperDownSpeed: 0.24,
+    plungerLaunchMinVelocity: 22,
+    plungerLaunchMaxVelocity: 44,
+    plungerLaunchSideVelocity: -2.4,
+    plungerChargeRate: 0.022,
   },
 
   ball: {
-    radius: 17,
-    spawn: { x: 868, y: 1488 },
+    radius: 18,
+    spawn: { x: 1000, y: 1728 },
     resetVelocity: { x: 0, y: 0 },
   },
 
+  // PLUNGER LANE: move x/restY/rails together if the launch lane drifts from the blockout.
   plunger: {
-    x: 874,
-    restY: 1582,
-    width: 44,
-    height: 92,
-    chargeTravel: 70,
-    laneBottomY: 1600,
-    launchVector: { x: -0.006, y: -1 },
+    x: 1000,
+    restY: 1804,
+    width: 42,
+    height: 94,
+    chargeTravel: 72,
+    launchMinY: 1330,
+    launchVector: { x: -0.022, y: -1 },
+    touchArea: { x: 875, y: 1270, width: 205, height: 650 },
   },
 
-  // TUNING: collision coordinates are intentionally explicit and centralized for fast blockout edits.
-  segments: [
-    { id: 'left-outer-wall', kind: 'wall', from: { x: 122, y: 247 }, to: { x: 58, y: 1500 }, thickness: 34 },
-    { id: 'right-outer-wall', kind: 'wall', from: { x: 820, y: 246 }, to: { x: 812, y: 1508 }, thickness: 34 },
-    { id: 'top-left-arch', kind: 'orbit', from: { x: 122, y: 247 }, to: { x: 293, y: 82 }, thickness: 30 },
-    { id: 'top-center-arch', kind: 'wall', from: { x: 293, y: 82 }, to: { x: 644, y: 82 }, thickness: 30 },
-    { id: 'top-right-arch', kind: 'orbit', from: { x: 644, y: 82 }, to: { x: 820, y: 246 }, thickness: 30 },
-    { id: 'left-orbit-guide', kind: 'orbit', from: { x: 169, y: 248 }, to: { x: 142, y: 733 }, thickness: 24 },
-    { id: 'right-orbit-guide', kind: 'orbit', from: { x: 771, y: 252 }, to: { x: 752, y: 720 }, thickness: 24 },
-    { id: 'left-ramp-mouth', kind: 'rampEntrance', from: { x: 226, y: 744 }, to: { x: 356, y: 664 }, thickness: 25 },
-    { id: 'right-ramp-mouth', kind: 'rampEntrance', from: { x: 589, y: 662 }, to: { x: 722, y: 744 }, thickness: 25 },
-    { id: 'left-bumper-nest-rail', kind: 'bumperNest', from: { x: 251, y: 478 }, to: { x: 316, y: 622 }, thickness: 20 },
-    { id: 'right-bumper-nest-rail', kind: 'bumperNest', from: { x: 676, y: 478 }, to: { x: 612, y: 622 }, thickness: 20 },
-    { id: 'center-bumper-nest-rail', kind: 'bumperNest', from: { x: 392, y: 705 }, to: { x: 548, y: 705 }, thickness: 18 },
-    { id: 'left-bank-guard', kind: 'targetBank', from: { x: 210, y: 875 }, to: { x: 285, y: 1010 }, thickness: 22 },
-    { id: 'right-bank-guard', kind: 'targetBank', from: { x: 733, y: 875 }, to: { x: 657, y: 1010 }, thickness: 22 },
-    { id: 'left-outlane-left', kind: 'outlane', from: { x: 92, y: 1130 }, to: { x: 136, y: 1496 }, thickness: 22 },
-    { id: 'left-outlane-right', kind: 'outlane', from: { x: 204, y: 1134 }, to: { x: 162, y: 1460 }, thickness: 22 },
-    { id: 'right-outlane-left', kind: 'outlane', from: { x: 740, y: 1134 }, to: { x: 781, y: 1460 }, thickness: 22 },
-    { id: 'right-outlane-right', kind: 'outlane', from: { x: 846, y: 1130 }, to: { x: 807, y: 1496 }, thickness: 22 },
-    { id: 'left-inlane', kind: 'inlane', from: { x: 222, y: 1218 }, to: { x: 342, y: 1362 }, thickness: 24 },
-    { id: 'right-inlane', kind: 'inlane', from: { x: 720, y: 1218 }, to: { x: 600, y: 1362 }, thickness: 24 },
-    { id: 'left-apron', kind: 'wall', from: { x: 111, y: 1572 }, to: { x: 328, y: 1478 }, thickness: 34 },
-    { id: 'right-apron', kind: 'wall', from: { x: 830, y: 1572 }, to: { x: 613, y: 1478 }, thickness: 34 },
-    { id: 'plunger-lane-left', kind: 'plungerLane', from: { x: 812, y: 886 }, to: { x: 812, y: 1596 }, thickness: 18 },
-    { id: 'plunger-lane-right', kind: 'plungerLane', from: { x: 921, y: 210 }, to: { x: 921, y: 1620 }, thickness: 26 },
-    { id: 'plunger-lane-top-hook', kind: 'plungerLane', from: { x: 835, y: 225 }, to: { x: 921, y: 210 }, thickness: 22 },
-    { id: 'plunger-lane-bottom-stop', kind: 'plungerLane', from: { x: 816, y: 1614 }, to: { x: 920, y: 1614 }, thickness: 22 },
-  ] satisfies SegmentBody[],
+  // ORBITS AND OUTER WALLS: approximate broad guide rails, leaving the center jackpot lane open.
+  wallSegments: [
+    { id: 'left-outer-wall', kind: 'wall', from: { x: 137, y: 284 }, to: { x: 78, y: 1712 }, thickness: 34 },
+    { id: 'right-outer-wall', kind: 'wall', from: { x: 938, y: 286 }, to: { x: 930, y: 1712 }, thickness: 34 },
+    { id: 'top-left-arch', kind: 'orbit', from: { x: 137, y: 284 }, to: { x: 335, y: 96 }, thickness: 30 },
+    { id: 'top-center-arch', kind: 'wall', from: { x: 335, y: 96 }, to: { x: 743, y: 96 }, thickness: 30 },
+    { id: 'top-right-arch', kind: 'orbit', from: { x: 743, y: 96 }, to: { x: 938, y: 286 }, thickness: 30 },
+    { id: 'left-orbit-inner', kind: 'orbit', from: { x: 204, y: 306 }, to: { x: 174, y: 805 }, thickness: 20 },
+    { id: 'right-orbit-inner', kind: 'orbit', from: { x: 876, y: 306 }, to: { x: 846, y: 805 }, thickness: 20 },
 
-  rects: [
-    { id: 'left-target-1', kind: 'targetBank', x: 279, y: 828, width: 22, height: 72, angle: -0.38, score: 250 },
-    { id: 'left-target-2', kind: 'targetBank', x: 315, y: 898, width: 22, height: 72, angle: -0.38, score: 250 },
-    { id: 'left-target-3', kind: 'targetBank', x: 351, y: 968, width: 22, height: 72, angle: -0.38, score: 250 },
-    { id: 'right-target-1', kind: 'targetBank', x: 662, y: 828, width: 22, height: 72, angle: 0.38, score: 250 },
-    { id: 'right-target-2', kind: 'targetBank', x: 626, y: 898, width: 22, height: 72, angle: 0.38, score: 250 },
-    { id: 'right-target-3', kind: 'targetBank', x: 590, y: 968, width: 22, height: 72, angle: 0.38, score: 250 },
-    { id: 'drain', kind: 'drain', x: 470, y: 1642, width: 230, height: 34, isSensor: true },
-    { id: 'plunger-ready', kind: 'plungerLane', x: 868, y: 1517, width: 82, height: 160, isSensor: true },
-  ] satisfies RectBody[],
+    // RAMP MOUTHS: simple open guides that feed the ball back toward the middle.
+    { id: 'left-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 242, y: 846 }, to: { x: 406, y: 756 }, thickness: 22 },
+    { id: 'left-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 316, y: 956 }, to: { x: 476, y: 828 }, thickness: 18 },
+    { id: 'right-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 674, y: 756 }, to: { x: 838, y: 846 }, thickness: 22 },
+    { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 604, y: 828 }, to: { x: 764, y: 956 }, thickness: 18 },
 
+    // LOWER PLAYFIELD: inlanes, outlanes, apron, and drain gap. Keep the center gap clear.
+    { id: 'left-outlane-outer', kind: 'outlane', from: { x: 108, y: 1288 }, to: { x: 145, y: 1732 }, thickness: 20 },
+    { id: 'left-outlane-inner', kind: 'outlane', from: { x: 246, y: 1312 }, to: { x: 208, y: 1668 }, thickness: 20 },
+    { id: 'right-outlane-inner', kind: 'outlane', from: { x: 834, y: 1312 }, to: { x: 872, y: 1668 }, thickness: 20 },
+    { id: 'right-outlane-outer', kind: 'outlane', from: { x: 972, y: 1288 }, to: { x: 935, y: 1732 }, thickness: 20 },
+    { id: 'left-inlane', kind: 'inlane', from: { x: 276, y: 1402 }, to: { x: 392, y: 1602 }, thickness: 22 },
+    { id: 'right-inlane', kind: 'inlane', from: { x: 804, y: 1402 }, to: { x: 688, y: 1602 }, thickness: 22 },
+    { id: 'left-apron', kind: 'apron', from: { x: 116, y: 1816 }, to: { x: 350, y: 1700 }, thickness: 32 },
+    { id: 'right-apron', kind: 'apron', from: { x: 964, y: 1816 }, to: { x: 730, y: 1700 }, thickness: 32 },
+
+    // PLUNGER LANE: right-side launch rail and top deflector into the upper playfield.
+    { id: 'plunger-left-rail', kind: 'plungerLane', from: { x: 924, y: 520 }, to: { x: 924, y: 1820 }, thickness: 18 },
+    { id: 'plunger-right-rail', kind: 'plungerLane', from: { x: 1062, y: 225 }, to: { x: 1062, y: 1845 }, thickness: 26 },
+    { id: 'plunger-top-feed', kind: 'plungerLane', from: { x: 928, y: 332 }, to: { x: 784, y: 236 }, thickness: 22 },
+    { id: 'plunger-bottom-stop', kind: 'plungerLane', from: { x: 930, y: 1844 }, to: { x: 1060, y: 1844 }, thickness: 24 },
+  ] satisfies WallSegment[],
+
+  // ROUNDED POSTS: reduce sharp-corner traps around slings, lane entrances, and ramp mouths.
+  posts: [
+    { id: 'left-ramp-mouth-post', kind: 'rampEntrance', x: 476, y: 828, radius: 16 },
+    { id: 'right-ramp-mouth-post', kind: 'rampEntrance', x: 604, y: 828, radius: 16 },
+    { id: 'left-inlane-post', kind: 'inlane', x: 392, y: 1602, radius: 18 },
+    { id: 'right-inlane-post', kind: 'inlane', x: 688, y: 1602, radius: 18 },
+    { id: 'left-sling-post', kind: 'post', x: 294, y: 1514, radius: 17 },
+    { id: 'right-sling-post', kind: 'post', x: 786, y: 1514, radius: 17 },
+    { id: 'left-flipper-return-post', kind: 'post', x: 345, y: 1682, radius: 14 },
+    { id: 'right-flipper-return-post', kind: 'post', x: 735, y: 1682, radius: 14 },
+    { id: 'plunger-feed-post', kind: 'plungerLane', x: 928, y: 332, radius: 14 },
+  ] satisfies RoundedPost[],
+
+  // SENSORS: drain and simple target banks. Sensors score or reset without adding visible art.
+  sensors: [
+    { id: 'drain', kind: 'drain', x: 540, y: 1878, width: 270, height: 48 },
+    { id: 'plunger-ready', kind: 'plungerReady', x: 1000, y: 1718, width: 108, height: 250 },
+    { id: 'left-target-1', kind: 'targetBank', x: 318, y: 952, width: 32, height: 96, angle: -0.38, score: 250 },
+    { id: 'left-target-2', kind: 'targetBank', x: 366, y: 1036, width: 32, height: 96, angle: -0.38, score: 250 },
+    { id: 'right-target-1', kind: 'targetBank', x: 762, y: 952, width: 32, height: 96, angle: 0.38, score: 250 },
+    { id: 'right-target-2', kind: 'targetBank', x: 714, y: 1036, width: 32, height: 96, angle: 0.38, score: 250 },
+  ] satisfies SensorBody[],
+
+  // BUMPER NEST: three simple circular bumpers around the upper-middle blockout.
   bumpers: [
-    { id: 'quetzal', x: 391, y: 435, radius: 42, score: 1000 },
-    { id: 'jaguar', x: 539, y: 435, radius: 42, score: 1000 },
-    { id: 'sun', x: 466, y: 568, radius: 42, score: 1000 },
+    { id: 'quetzal', x: 448, y: 500, radius: 43, score: 1000 },
+    { id: 'jaguar', x: 632, y: 500, radius: 43, score: 1000 },
+    { id: 'sun', x: 540, y: 646, radius: 43, score: 1000 },
   ] satisfies BumperBody[],
 
   slingshots: [
     {
       id: 'left',
-      from: { x: 255, y: 1325 },
-      to: { x: 370, y: 1400 },
-      thickness: 30,
+      from: { x: 294, y: 1514 },
+      to: { x: 432, y: 1616 },
+      thickness: 28,
       score: 100,
-      force: { x: 0.86, y: -0.52 },
+      force: { x: 0.9, y: -0.68 },
     },
     {
       id: 'right',
-      from: { x: 686, y: 1325 },
-      to: { x: 571, y: 1400 },
-      thickness: 30,
+      from: { x: 786, y: 1514 },
+      to: { x: 648, y: 1616 },
+      thickness: 28,
       score: 100,
-      force: { x: -0.86, y: -0.52 },
+      force: { x: -0.9, y: -0.68 },
     },
   ] satisfies SlingBody[],
 
+  // FLIPPERS: pivot/length/restAngle/activeAngle are the main lower-playfield feel controls.
   flippers: [
     {
       id: 'left',
-      pivot: { x: 324, y: 1455 },
-      length: 154,
-      width: 28,
-      restAngle: -18,
-      activeAngle: -62,
+      pivot: { x: 382, y: 1678 },
+      length: 158,
+      width: 30,
+      restAngle: -21,
+      activeAngle: -72,
     },
     {
       id: 'right',
-      pivot: { x: 617, y: 1455 },
-      length: 154,
-      width: 28,
-      restAngle: 198,
-      activeAngle: 242,
+      pivot: { x: 698, y: 1678 },
+      length: 158,
+      width: 30,
+      restAngle: 201,
+      activeAngle: 252,
     },
   ] satisfies FlipperConfig[],
 }
