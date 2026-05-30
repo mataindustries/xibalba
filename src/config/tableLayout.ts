@@ -42,6 +42,16 @@ export type SensorBody = {
   score?: number
 }
 
+export type TrapKickerZone = {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  velocity: Point
+  reposition?: Point
+}
+
 export type BumperBody = {
   id: string
   x: number
@@ -128,6 +138,17 @@ export const tableLayout = {
     shooterExitRepositionX,
     shooterExitRepositionY,
     shooterExitFallbackY,
+    // TUNING: anti-stuck values should stay gentle; trap kickers only fire on very slow balls.
+    stuckVelocityThreshold: 0.45,
+    stuckDurationMs: 1800,
+    stuckNudgeVelocityX: 1.7,
+    stuckNudgeVelocityY: -2.2,
+    trapKickSpeedThreshold: 2.2,
+    trapKickerCooldownMs: 950,
+    scorePopupDurationMs: 720,
+    scorePopupRise: 42,
+    pulseScale: 1.16,
+    pulseDurationMs: 110,
   },
 
   ball: {
@@ -213,6 +234,27 @@ export const tableLayout = {
     { id: 'right-target-1', kind: 'targetBank', x: 762, y: 952, width: 32, height: 96, angle: 0.38, score: 250 },
     { id: 'right-target-2', kind: 'targetBank', x: 714, y: 1036, width: 32, height: 96, angle: 0.38, score: 250 },
   ] satisfies SensorBody[],
+
+  trapKickers: [
+    {
+      id: 'bottomRightCorner',
+      x: 872,
+      y: 1668,
+      width: 112,
+      height: 210,
+      velocity: { x: -5.8, y: -4.4 },
+      reposition: { x: 828, y: 1608 },
+    },
+    {
+      id: 'rightOrbitRampPocket',
+      x: 818,
+      y: 610,
+      width: 150,
+      height: 220,
+      velocity: { x: -5.5, y: 5.2 },
+      reposition: { x: 770, y: 650 },
+    },
+  ] satisfies TrapKickerZone[],
 
   // BUMPER NEST: three simple circular bumpers around the upper-middle blockout.
   bumpers: [

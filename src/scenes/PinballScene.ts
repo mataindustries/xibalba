@@ -7,6 +7,7 @@ import type {
   RoundedPost,
   SensorBody,
   SlingBody,
+  TrapKickerZone,
   WallSegment,
 } from '../config/tableLayout'
 
@@ -39,13 +40,20 @@ export class PinballScene extends Phaser.Scene {
   private playfieldGraphics!: Phaser.GameObjects.Graphics
   private plungerVisual!: Phaser.GameObjects.Rectangle
   private scoreText!: Phaser.GameObjects.Text
+  private ballStateText!: Phaser.GameObjects.Text
   private keys?: ControlKeys
+  private bumperVisuals = new Map<string, Phaser.GameObjects.Arc>()
+  private slingVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
   private pointerControls = new Map<number, 'left' | 'right' | 'plunger'>()
   private score = 0
+  private ballState: 'IN PLAY' | 'PLUNGER' | 'DRAINED' = 'PLUNGER'
   private plungerCharge = 0
   private plungerHeld = false
   private lastKeyboardPlunger = false
+  private lastBallMotionAt = 0
   private lastShooterExitAt = 0
+  private drainResetPending = false
+  private lastTrapKickAt = new Map<string, number>()
   private debugEnabled = false
 
   constructor() {
@@ -74,11 +82,13 @@ export class PinballScene extends Phaser.Scene {
     tableLayout.wallSegments.forEach((segment) => this.createStaticWallSegment(segment))
     tableLayout.posts.forEach((post) => this.createRoundedPost(post))
     tableLayout.sensors.forEach((sensor) => this.createSensor(sensor))
+    tableLayout.trapKickers.forEach((zone) => this.createTrapKickerSensor(zone))
     tableLayout.bumpers.forEach((bumper) => this.createBumper(bumper))
     tableLayout.slingshots.forEach((sling) => this.createSling(sling))
     tableLayout.flippers.forEach((flipper) => this.createFlipper(flipper))
 
     this.createBall()
+    this.lastBallMotionAt = this.time.now
     this.createPlungerVisual()
     this.createHud()
     this.bindInput()
@@ -91,6 +101,9 @@ export class PinballScene extends Phaser.Scene {
     this.updateFlippers(delta)
     this.updatePlunger()
     this.maybeAssistShooterExit()
+    this.updateBallState()
+    this.updateTrapKickers()
+    this.updateAntiStuck()
     this.keepBallPlayable()
 
     if (this.debugEnabled) {
@@ -136,6 +149,17 @@ export class PinballScene extends Phaser.Scene {
     return body
   }
 
+  private createTrapKickerSensor(zone: TrapKickerZone) {
+    const body = this.matter.add.rectangle(zone.x, zone.y, zone.width, zone.height, {
+      isStatic: true,
+      isSensor: true,
+      label: `trapKicker:${zone.id}`,
+    })
+
+    this.collisionBodies.push(body)
+    return body
+  }
+
   private createBumper(bumper: BumperBody) {
     const body = this.matter.add.circle(bumper.x, bumper.y, bumper.radius, {
       isStatic: true,
@@ -144,7 +168,8 @@ export class PinballScene extends Phaser.Scene {
       restitution: tableLayout.tuning.bumperBounce,
     })
 
-    this.add.circle(bumper.x, bumper.y, bumper.radius, 0xff3bc7, 0.34).setStrokeStyle(5, 0x58fff8, 0.9).setDepth(4)
+    const visual = this.add.circle(bumper.x, bumper.y, bumper.radius, 0xff3bc7, 0.34).setStrokeStyle(5, 0x58fff8, 0.9).setDepth(4)
+    this.bumperVisuals.set(bumper.id, visual)
     this.collisionBodies.push(body)
     return body
   }
@@ -159,6 +184,9 @@ export class PinballScene extends Phaser.Scene {
     })
 
     this.matter.body.setAngle(body, angle)
+    const visual = this.add.rectangle(x, y, length, sling.thickness, 0xffd166, 0.24).setDepth(5)
+    visual.rotation = angle
+    this.slingVisuals.set(sling.id, visual)
     this.collisionBodies.push(body)
     return body
   }
@@ -244,6 +272,17 @@ export class PinballScene extends Phaser.Scene {
       })
       .setDepth(40)
       .setAlpha(0.86)
+
+    this.ballStateText = this.add
+      .text(24, 86, 'STATE PLUNGER', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '15px',
+        color: '#ffd166',
+        stroke: '#071018',
+        strokeThickness: 3,
+      })
+      .setDepth(40)
+      .setAlpha(0.9)
   }
 
   private bindInput() {
@@ -287,7 +326,12 @@ export class PinballScene extends Phaser.Scene {
 
     if (label.startsWith('bumper:')) {
       const bumper = tableLayout.bumpers.find((item) => label === `bumper:${item.id}`)
-      this.addScore(bumper?.score ?? 1000)
+      const points = bumper?.score ?? 1000
+      this.addScore(points)
+      this.showScorePopup(otherBody.position.x, otherBody.position.y - 28, 'BUMPER HIT', points)
+      if (bumper) {
+        this.pulse(this.bumperVisuals.get(bumper.id))
+      }
       this.kickBallAwayFrom(otherBody.position, tableLayout.tuning.bumperForce)
       return
     }
@@ -296,6 +340,8 @@ export class PinballScene extends Phaser.Scene {
       const sling = tableLayout.slingshots.find((item) => label === `sling:${item.id}`)
       if (sling) {
         this.addScore(sling.score)
+        this.showScorePopup(otherBody.position.x, otherBody.position.y - 22, 'SLING HIT', sling.score)
+        this.pulse(this.slingVisuals.get(sling.id))
         this.applyBallForce(sling.force.x * tableLayout.tuning.slingForceScale, sling.force.y * tableLayout.tuning.slingForceScale)
       }
       return
@@ -304,12 +350,19 @@ export class PinballScene extends Phaser.Scene {
     if (label.startsWith('targetBank:')) {
       const targetId = label.split(':')[1]
       const target = tableLayout.sensors.find((sensor) => sensor.id === targetId)
-      this.addScore(target?.score ?? 250)
+      const points = target?.score ?? 250
+      this.addScore(points)
+      this.showScorePopup(this.ball.x, this.ball.y - 28, 'TARGET HIT', points)
       return
     }
 
     if (label.startsWith('drain:')) {
-      this.time.delayedCall(120, () => this.resetBall())
+      if (!this.drainResetPending) {
+        this.drainResetPending = true
+        this.setBallState('DRAINED')
+        this.showScorePopup(this.ball.x, this.ball.y - 30, 'DRAIN')
+        this.time.delayedCall(260, () => this.resetBall())
+      }
       return
     }
 
@@ -441,6 +494,9 @@ export class PinballScene extends Phaser.Scene {
     this.ball.setAngularVelocity(0)
     this.plungerCharge = 0
     this.plungerHeld = false
+    this.drainResetPending = false
+    this.lastBallMotionAt = this.time.now
+    this.setBallState('PLUNGER')
   }
 
   private keepBallPlayable() {
@@ -452,6 +508,77 @@ export class PinballScene extends Phaser.Scene {
 
   private isBallInPlungerLane() {
     return this.ball.x > tableLayout.plunger.laneMinX && this.ball.y > tableLayout.plunger.launchMinY
+  }
+
+  private updateBallState() {
+    if (this.ballState === 'DRAINED') {
+      return
+    }
+
+    this.setBallState(this.isBallInPlungerLane() ? 'PLUNGER' : 'IN PLAY')
+  }
+
+  private setBallState(state: 'IN PLAY' | 'PLUNGER' | 'DRAINED') {
+    if (this.ballState === state) {
+      return
+    }
+
+    this.ballState = state
+    this.ballStateText?.setText(`STATE ${state}`)
+  }
+
+  private updateAntiStuck() {
+    if (this.ballState === 'DRAINED' || this.isBallInPlungerLane()) {
+      this.lastBallMotionAt = this.time.now
+      return
+    }
+
+    const speed = Math.hypot(this.ballBody.velocity.x, this.ballBody.velocity.y)
+    if (speed > tableLayout.tuning.stuckVelocityThreshold) {
+      this.lastBallMotionAt = this.time.now
+      return
+    }
+
+    if (this.time.now - this.lastBallMotionAt < tableLayout.tuning.stuckDurationMs) {
+      return
+    }
+
+    const horizontalDirection = this.ball.x < tableLayout.table.width / 2 ? 1 : -1
+    this.ball.setVelocity(
+      this.ballBody.velocity.x + horizontalDirection * tableLayout.tuning.stuckNudgeVelocityX,
+      this.ballBody.velocity.y + tableLayout.tuning.stuckNudgeVelocityY,
+    )
+    this.lastBallMotionAt = this.time.now
+  }
+
+  private updateTrapKickers() {
+    if (this.ballState === 'DRAINED' || this.isBallInPlungerLane()) {
+      return
+    }
+
+    const speed = Math.hypot(this.ballBody.velocity.x, this.ballBody.velocity.y)
+    if (speed > tableLayout.tuning.trapKickSpeedThreshold) {
+      return
+    }
+
+    tableLayout.trapKickers.forEach((zone) => {
+      if (!this.pointInCenteredRect(this.ball, zone)) {
+        return
+      }
+
+      const lastKickAt = this.lastTrapKickAt.get(zone.id) ?? 0
+      if (this.time.now - lastKickAt < tableLayout.tuning.trapKickerCooldownMs) {
+        return
+      }
+
+      this.lastTrapKickAt.set(zone.id, this.time.now)
+      if (zone.reposition) {
+        this.ball.setPosition(zone.reposition.x, zone.reposition.y)
+      }
+      this.ball.setVelocity(zone.velocity.x, zone.velocity.y)
+      this.ball.setAngularVelocity(0)
+      this.lastBallMotionAt = this.time.now
+    })
   }
 
   private maybeAssistShooterExit() {
@@ -479,6 +606,46 @@ export class PinballScene extends Phaser.Scene {
   private addScore(points: number) {
     this.score += points
     this.scoreText.setText(`SCORE ${this.score}`)
+  }
+
+  private showScorePopup(x: number, y: number, label: string, points?: number) {
+    const text = this.add
+      .text(x, y, points ? `${label} +${points}` : label, {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '18px',
+        color: '#fff4b0',
+        stroke: '#071018',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(45)
+
+    this.tweens.add({
+      targets: text,
+      y: y - tableLayout.tuning.scorePopupRise,
+      alpha: 0,
+      duration: tableLayout.tuning.scorePopupDurationMs,
+      ease: 'Sine.easeOut',
+      onComplete: () => text.destroy(),
+    })
+  }
+
+  private pulse(target?: Phaser.GameObjects.GameObject & { setScale: (x: number, y?: number) => unknown }) {
+    if (!target) {
+      return
+    }
+
+    this.tweens.killTweensOf(target)
+    target.setScale(1)
+    this.tweens.add({
+      targets: target,
+      scaleX: tableLayout.tuning.pulseScale,
+      scaleY: tableLayout.tuning.pulseScale,
+      duration: tableLayout.tuning.pulseDurationMs,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+      onComplete: () => target.setScale(1),
+    })
   }
 
   private applyBallForce(x: number, y: number) {
