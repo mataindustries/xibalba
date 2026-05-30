@@ -31,6 +31,13 @@ type ControlKeys = {
   debug: Phaser.Input.Keyboard.Key
 }
 
+type ComboHitKind = 'bumper' | 'sling' | 'targetOrLane'
+
+type ScorePopupOptions = {
+  major?: boolean
+  color?: string
+}
+
 export class PinballScene extends Phaser.Scene {
   private ball!: Phaser.Physics.Matter.Image
   private ballBody!: MatterJS.BodyType
@@ -41,9 +48,13 @@ export class PinballScene extends Phaser.Scene {
   private plungerVisual!: Phaser.GameObjects.Rectangle
   private scoreText!: Phaser.GameObjects.Text
   private ballStateText!: Phaser.GameObjects.Text
+  private rolloverText!: Phaser.GameObjects.Text
   private keys?: ControlKeys
   private bumperVisuals = new Map<string, Phaser.GameObjects.Arc>()
   private slingVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
+  private rolloverVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
+  private litRollovers = new Set<string>()
+  private jackpotVisual?: Phaser.GameObjects.Rectangle
   private pointerControls = new Map<number, 'left' | 'right' | 'plunger'>()
   private score = 0
   private ballState: 'IN PLAY' | 'PLUNGER' | 'DRAINED' = 'PLUNGER'
@@ -54,6 +65,9 @@ export class PinballScene extends Phaser.Scene {
   private lastShooterExitAt = 0
   private drainResetPending = false
   private lastTrapKickAt = new Map<string, number>()
+  private comboStep = 0
+  private lastComboAt = 0
+  private lastLaneComboAt = 0
   private debugEnabled = false
 
   constructor() {
@@ -146,7 +160,33 @@ export class PinballScene extends Phaser.Scene {
 
     this.matter.body.setAngle(body, sensor.angle ?? 0)
     this.collisionBodies.push(body)
+
+    if (sensor.kind === 'jackpot') {
+      this.createJackpotVisual(sensor)
+    }
+    if (sensor.kind === 'rollover') {
+      this.createRolloverVisual(sensor)
+    }
+
     return body
+  }
+
+  private createJackpotVisual(sensor: SensorBody) {
+    // TUNING: this low-alpha gate marks the jackpot sensor without changing collision geometry.
+    this.jackpotVisual = this.add
+      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, 0xffd166, 0.12)
+      .setStrokeStyle(4, 0xfff4b0, 0.48)
+      .setDepth(3)
+    this.jackpotVisual.rotation = sensor.angle ?? 0
+  }
+
+  private createRolloverVisual(sensor: SensorBody) {
+    const visual = this.add
+      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, 0x1aa58d, 0.2)
+      .setStrokeStyle(3, 0x58fff8, 0.48)
+      .setDepth(3)
+    visual.rotation = sensor.angle ?? 0
+    this.rolloverVisuals.set(sensor.id, visual)
   }
 
   private createTrapKickerSensor(zone: TrapKickerZone) {
@@ -283,6 +323,17 @@ export class PinballScene extends Phaser.Scene {
       })
       .setDepth(40)
       .setAlpha(0.9)
+
+    this.rolloverText = this.add
+      .text(24, 113, `ROLLOVERS 0/${this.rolloverCount()}`, {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '15px',
+        color: '#9dffb8',
+        stroke: '#071018',
+        strokeThickness: 3,
+      })
+      .setDepth(40)
+      .setAlpha(0.9)
   }
 
   private bindInput() {
@@ -333,6 +384,7 @@ export class PinballScene extends Phaser.Scene {
         this.pulse(this.bumperVisuals.get(bumper.id))
       }
       this.kickBallAwayFrom(otherBody.position, tableLayout.tuning.bumperForce)
+      this.registerComboHit('bumper')
       return
     }
 
@@ -343,6 +395,7 @@ export class PinballScene extends Phaser.Scene {
         this.showScorePopup(otherBody.position.x, otherBody.position.y - 22, 'SLING HIT', sling.score)
         this.pulse(this.slingVisuals.get(sling.id))
         this.applyBallForce(sling.force.x * tableLayout.tuning.slingForceScale, sling.force.y * tableLayout.tuning.slingForceScale)
+        this.registerComboHit('sling')
       }
       return
     }
@@ -353,6 +406,17 @@ export class PinballScene extends Phaser.Scene {
       const points = target?.score ?? 250
       this.addScore(points)
       this.showScorePopup(this.ball.x, this.ball.y - 28, 'TARGET HIT', points)
+      this.registerComboHit('targetOrLane')
+      return
+    }
+
+    if (label.startsWith('jackpot:')) {
+      this.handleJackpotHit(label)
+      return
+    }
+
+    if (label.startsWith('rollover:')) {
+      this.handleRolloverHit(label)
       return
     }
 
@@ -368,6 +432,11 @@ export class PinballScene extends Phaser.Scene {
 
     if (label.startsWith('shooterExit:')) {
       this.feedShooterExit()
+      return
+    }
+
+    if (label.startsWith('orbit:') || label.startsWith('rampEntrance:')) {
+      this.registerLaneComboHit()
     }
   }
 
@@ -603,34 +672,154 @@ export class PinballScene extends Phaser.Scene {
     this.ball.setAngularVelocity(0)
   }
 
+  private handleJackpotHit(label: string) {
+    const sensor = this.sensorFromLabel(label)
+    const points = sensor?.score ?? tableLayout.tuning.jackpotScore
+    this.addScore(points)
+    this.showScorePopup(this.ball.x, this.ball.y - 54, 'TEMPLE JACKPOT', points, {
+      major: true,
+      color: '#fff4b0',
+    })
+    this.pulse(this.jackpotVisual, tableLayout.tuning.jackpotPulseScale, tableLayout.tuning.majorScorePopupDurationMs * 0.18)
+    this.registerComboHit('targetOrLane')
+  }
+
+  private handleRolloverHit(label: string) {
+    const sensor = this.sensorFromLabel(label)
+    if (!sensor || this.litRollovers.has(sensor.id)) {
+      return
+    }
+
+    const points = sensor.score ?? tableLayout.tuning.rolloverScore
+    this.litRollovers.add(sensor.id)
+    this.setRolloverVisualLit(sensor.id, true)
+    this.addScore(points)
+    this.showScorePopup(sensor.x, sensor.y - 30, 'ROLLOVER', points)
+    this.pulse(this.rolloverVisuals.get(sensor.id), tableLayout.tuning.rolloverPulseScale)
+    this.updateRolloverUi()
+
+    if (this.litRollovers.size >= this.rolloverCount()) {
+      this.addScore(tableLayout.tuning.eclipseBonusScore)
+      this.showScorePopup(tableLayout.table.width / 2, sensor.y - 86, 'ECLIPSE BONUS', tableLayout.tuning.eclipseBonusScore, {
+        major: true,
+        color: '#9dffb8',
+      })
+      this.time.delayedCall(tableLayout.tuning.rolloverBonusResetDelayMs, () => this.resetRollovers())
+    }
+  }
+
+  private sensorFromLabel(label: string) {
+    const sensorId = label.split(':')[1]
+    return tableLayout.sensors.find((sensor) => sensor.id === sensorId)
+  }
+
+  private rolloverCount() {
+    return tableLayout.sensors.filter((sensor) => sensor.kind === 'rollover').length
+  }
+
+  private updateRolloverUi() {
+    this.rolloverText?.setText(`ROLLOVERS ${this.litRollovers.size}/${this.rolloverCount()}`)
+  }
+
+  private setRolloverVisualLit(id: string, lit: boolean) {
+    const visual = this.rolloverVisuals.get(id)
+    if (!visual) {
+      return
+    }
+
+    visual.setFillStyle(lit ? 0xffd166 : 0x1aa58d, lit ? 0.84 : 0.2)
+    visual.setStrokeStyle(3, lit ? 0xfff4b0 : 0x58fff8, lit ? 0.95 : 0.48)
+  }
+
+  private resetRollovers() {
+    this.litRollovers.clear()
+    this.rolloverVisuals.forEach((_visual, id) => this.setRolloverVisualLit(id, false))
+    this.updateRolloverUi()
+  }
+
+  private registerLaneComboHit() {
+    if (this.time.now - this.lastLaneComboAt < tableLayout.tuning.comboLaneCooldownMs) {
+      return
+    }
+
+    this.lastLaneComboAt = this.time.now
+    this.registerComboHit('targetOrLane')
+  }
+
+  private registerComboHit(hit: ComboHitKind) {
+    const now = this.time.now
+    if (now - this.lastComboAt > tableLayout.tuning.comboWindowMs) {
+      this.comboStep = 0
+    }
+
+    if (hit === 'bumper') {
+      this.comboStep = 1
+      this.lastComboAt = now
+      return
+    }
+
+    if (hit === 'sling' && this.comboStep === 1) {
+      this.comboStep = 2
+      this.lastComboAt = now
+      this.awardCombo(2)
+      return
+    }
+
+    if (hit === 'targetOrLane' && this.comboStep === 2) {
+      this.comboStep = 0
+      this.lastComboAt = 0
+      this.awardCombo(3)
+      return
+    }
+
+    this.comboStep = 0
+    this.lastComboAt = 0
+  }
+
+  private awardCombo(multiplier: 2 | 3) {
+    const points = multiplier === 2 ? tableLayout.tuning.comboX2Score : tableLayout.tuning.comboX3Score
+    this.addScore(points)
+    this.showScorePopup(this.ball.x, this.ball.y - 64, `COMBO x${multiplier}`, points, {
+      major: multiplier === 3,
+      color: '#58fff8',
+    })
+  }
+
   private addScore(points: number) {
     this.score += points
     this.scoreText.setText(`SCORE ${this.score}`)
   }
 
-  private showScorePopup(x: number, y: number, label: string, points?: number) {
+  private showScorePopup(x: number, y: number, label: string, points?: number, options: ScorePopupOptions = {}) {
+    const popupRise = options.major ? tableLayout.tuning.majorScorePopupRise : tableLayout.tuning.scorePopupRise
+    const popupDuration = options.major ? tableLayout.tuning.majorScorePopupDurationMs : tableLayout.tuning.scorePopupDurationMs
+    const fontSize = options.major ? tableLayout.tuning.majorScorePopupFontSize : tableLayout.tuning.scorePopupFontSize
     const text = this.add
       .text(x, y, points ? `${label} +${points}` : label, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '18px',
-        color: '#fff4b0',
+        fontSize: `${fontSize}px`,
+        color: options.color ?? '#fff4b0',
         stroke: '#071018',
-        strokeThickness: 4,
+        strokeThickness: options.major ? 6 : 4,
       })
       .setOrigin(0.5)
       .setDepth(45)
 
     this.tweens.add({
       targets: text,
-      y: y - tableLayout.tuning.scorePopupRise,
+      y: y - popupRise,
       alpha: 0,
-      duration: tableLayout.tuning.scorePopupDurationMs,
+      duration: popupDuration,
       ease: 'Sine.easeOut',
       onComplete: () => text.destroy(),
     })
   }
 
-  private pulse(target?: Phaser.GameObjects.GameObject & { setScale: (x: number, y?: number) => unknown }) {
+  private pulse(
+    target?: Phaser.GameObjects.GameObject & { setScale: (x: number, y?: number) => unknown },
+    scale = tableLayout.tuning.pulseScale,
+    duration = tableLayout.tuning.pulseDurationMs,
+  ) {
     if (!target) {
       return
     }
@@ -639,9 +828,9 @@ export class PinballScene extends Phaser.Scene {
     target.setScale(1)
     this.tweens.add({
       targets: target,
-      scaleX: tableLayout.tuning.pulseScale,
-      scaleY: tableLayout.tuning.pulseScale,
-      duration: tableLayout.tuning.pulseDurationMs,
+      scaleX: scale,
+      scaleY: scale,
+      duration,
       yoyo: true,
       ease: 'Sine.easeOut',
       onComplete: () => target.setScale(1),

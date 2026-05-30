@@ -33,7 +33,7 @@ export type RoundedPost = {
 
 export type SensorBody = {
   id: string
-  kind: 'drain' | 'targetBank' | 'plungerReady' | 'shooterExit'
+  kind: 'drain' | 'targetBank' | 'plungerReady' | 'shooterExit' | 'jackpot' | 'rollover'
   x: number
   y: number
   width: number
@@ -149,6 +149,21 @@ export const tableLayout = {
     scorePopupRise: 42,
     pulseScale: 1.16,
     pulseDurationMs: 110,
+    // GAMEPLAY: first objective layer. Sensors are non-colliding; move their coordinates below to tune shots.
+    jackpotScore: 10000,
+    rolloverScore: 1000,
+    eclipseBonusScore: 15000,
+    comboWindowMs: 3400,
+    comboLaneCooldownMs: 520,
+    comboX2Score: 2000,
+    comboX3Score: 5000,
+    scorePopupFontSize: 22,
+    majorScorePopupFontSize: 34,
+    majorScorePopupDurationMs: 1120,
+    majorScorePopupRise: 76,
+    jackpotPulseScale: 1.32,
+    rolloverPulseScale: 1.2,
+    rolloverBonusResetDelayMs: 280,
   },
 
   ball: {
@@ -215,7 +230,7 @@ export const tableLayout = {
     { id: 'plunger-feed-post', kind: 'plungerLane', x: 928, y: 332, radius: 14 },
   ] satisfies RoundedPost[],
 
-  // SENSORS: drain and simple target banks. Sensors score or reset without adding visible art.
+  // SENSORS: all are non-colliding. Jackpot/rollovers add objectives without changing table geometry.
   sensors: [
     { id: 'drain', kind: 'drain', x: 540, y: 1790, width: 190, height: 150 },
     { id: 'left-outlane-drain', kind: 'drain', x: 182, y: 1780, width: 100, height: 210 },
@@ -229,6 +244,14 @@ export const tableLayout = {
       width: shooterExitWidth,
       height: shooterExitHeight,
     },
+    // TEMPLE JACKPOT: move this gate sensor to tune the center jackpot shot.
+    { id: 'temple-jackpot', kind: 'jackpot', x: 540, y: 365, width: 150, height: 88, score: 10000 },
+    // UPPER ROLLOVERS: five lane sensors under the temple gate.
+    { id: 'rollover-1', kind: 'rollover', x: 380, y: 760, width: 54, height: 78, score: 1000 },
+    { id: 'rollover-2', kind: 'rollover', x: 460, y: 760, width: 54, height: 78, score: 1000 },
+    { id: 'rollover-3', kind: 'rollover', x: 540, y: 760, width: 54, height: 78, score: 1000 },
+    { id: 'rollover-4', kind: 'rollover', x: 620, y: 760, width: 54, height: 78, score: 1000 },
+    { id: 'rollover-5', kind: 'rollover', x: 700, y: 760, width: 54, height: 78, score: 1000 },
     { id: 'left-target-1', kind: 'targetBank', x: 318, y: 952, width: 32, height: 96, angle: -0.38, score: 250 },
     { id: 'left-target-2', kind: 'targetBank', x: 366, y: 1036, width: 32, height: 96, angle: -0.38, score: 250 },
     { id: 'right-target-1', kind: 'targetBank', x: 762, y: 952, width: 32, height: 96, angle: 0.38, score: 250 },
