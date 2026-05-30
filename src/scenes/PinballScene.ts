@@ -593,6 +593,16 @@ export class PinballScene extends Phaser.Scene {
         graphics.lineStyle(3, 0xffd166, 0.35)
         graphics.strokeRect(sensor.x - sensor.width / 2, sensor.y - sensor.height / 2, sensor.width, sensor.height)
       })
+
+    tableLayout.wallSegments
+      .filter((segment) => segment.id === 'rightTrapFixGuide')
+      .forEach((segment) => {
+        graphics.lineStyle(segment.thickness, 0xffd166, 0.22)
+        graphics.beginPath()
+        graphics.moveTo(segment.from.x, segment.from.y)
+        graphics.lineTo(segment.to.x, segment.to.y)
+        graphics.strokePath()
+      })
   }
 
   private drawDebugOverlay() {

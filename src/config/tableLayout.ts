@@ -70,10 +70,10 @@ const shooterExitX = 965
 const shooterExitY = 320
 const shooterExitWidth = 130
 const shooterExitHeight = 260
-const shooterExitVelocityX = -9
-const shooterExitVelocityY = -5
-const shooterExitRepositionX = 850
-const shooterExitRepositionY = 390
+const shooterExitVelocityX = -8
+const shooterExitVelocityY = 1
+const shooterExitRepositionX = 800
+const shooterExitRepositionY = 410
 const shooterExitFallbackY = 470
 
 export const tableLayout = {
@@ -149,18 +149,19 @@ export const tableLayout = {
   // ORBITS AND OUTER WALLS: approximate broad guide rails, leaving the center jackpot lane open.
   wallSegments: [
     { id: 'left-outer-wall', kind: 'wall', from: { x: 137, y: 284 }, to: { x: 78, y: 1712 }, thickness: 34 },
-    { id: 'right-outer-wall', kind: 'wall', from: { x: 938, y: 620 }, to: { x: 930, y: 1712 }, thickness: 34 },
+    { id: 'right-outer-wall', kind: 'wall', from: { x: 938, y: 690 }, to: { x: 930, y: 1712 }, thickness: 34 },
     { id: 'top-left-arch', kind: 'orbit', from: { x: 137, y: 284 }, to: { x: 335, y: 96 }, thickness: 30 },
     { id: 'top-center-arch', kind: 'wall', from: { x: 335, y: 96 }, to: { x: 743, y: 96 }, thickness: 30 },
     { id: 'top-right-arch', kind: 'orbit', from: { x: 743, y: 96 }, to: { x: 938, y: 286 }, thickness: 30 },
     { id: 'left-orbit-inner', kind: 'orbit', from: { x: 204, y: 306 }, to: { x: 174, y: 805 }, thickness: 20 },
-    { id: 'right-orbit-inner', kind: 'orbit', from: { x: 850, y: 520 }, to: { x: 846, y: 805 }, thickness: 20 },
+    { id: 'right-orbit-inner', kind: 'orbit', from: { x: 848, y: 610 }, to: { x: 846, y: 805 }, thickness: 20 },
 
     // RAMP MOUTHS: simple open guides that feed the ball back toward the middle.
     { id: 'left-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 242, y: 846 }, to: { x: 406, y: 756 }, thickness: 22 },
     { id: 'left-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 316, y: 956 }, to: { x: 476, y: 828 }, thickness: 18 },
-    { id: 'right-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 674, y: 756 }, to: { x: 838, y: 846 }, thickness: 22 },
-    { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 604, y: 828 }, to: { x: 764, y: 956 }, thickness: 18 },
+    { id: 'right-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 660, y: 775 }, to: { x: 786, y: 850 }, thickness: 18 },
+    { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 594, y: 852 }, to: { x: 714, y: 954 }, thickness: 16 },
+    { id: 'rightTrapFixGuide', kind: 'orbit', from: { x: 885, y: 415 }, to: { x: 742, y: 548 }, thickness: 18 },
 
     // LOWER PLAYFIELD: inlanes, outlanes, apron, and drain gap. Keep the center gap clear.
     { id: 'left-outlane-outer', kind: 'outlane', from: { x: 108, y: 1288 }, to: { x: 145, y: 1732 }, thickness: 20 },
