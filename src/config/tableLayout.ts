@@ -66,6 +66,16 @@ export type FlipperConfig = {
   width: number
 }
 
+const shooterExitX = 965
+const shooterExitY = 320
+const shooterExitWidth = 130
+const shooterExitHeight = 260
+const shooterExitVelocityX = -9
+const shooterExitVelocityY = -5
+const shooterExitRepositionX = 850
+const shooterExitRepositionY = 390
+const shooterExitFallbackY = 470
+
 export const tableLayout = {
   // All playable coordinates use a clean 1080x1920 table space. The 941x1672
   // blockout image is scaled to this space by the scene.
@@ -99,12 +109,23 @@ export const tableLayout = {
     flipperImpulse: 15.5,
     flipperContactRadius: 34,
     flipperImpulseCooldownMs: 85,
-    // TUNING: plungerForce is max launch velocity; shooterExitForce kicks the ball out of the lane.
+    // TUNING: plungerForce is max launch velocity.
     plungerTapForce: 22,
     plungerForce: 38,
     plungerChargeRate: 0.024,
-    shooterExitForce: { x: -18, y: -6 },
     shooterExitCooldownMs: 150,
+    // TUNING: shooter-lane exit. Keep the sensor near x 965, y 250-400.
+    // If the ball sticks, enlarge/move the sensor or move repositionX slightly left.
+    // If the exit feels fake, move repositionX closer to 900 and reduce velocityX/Y.
+    shooterExitX,
+    shooterExitY,
+    shooterExitWidth,
+    shooterExitHeight,
+    shooterExitVelocityX,
+    shooterExitVelocityY,
+    shooterExitRepositionX,
+    shooterExitRepositionY,
+    shooterExitFallbackY,
   },
 
   ball: {
@@ -128,12 +149,12 @@ export const tableLayout = {
   // ORBITS AND OUTER WALLS: approximate broad guide rails, leaving the center jackpot lane open.
   wallSegments: [
     { id: 'left-outer-wall', kind: 'wall', from: { x: 137, y: 284 }, to: { x: 78, y: 1712 }, thickness: 34 },
-    { id: 'right-outer-wall', kind: 'wall', from: { x: 938, y: 286 }, to: { x: 930, y: 1712 }, thickness: 34 },
+    { id: 'right-outer-wall', kind: 'wall', from: { x: 938, y: 620 }, to: { x: 930, y: 1712 }, thickness: 34 },
     { id: 'top-left-arch', kind: 'orbit', from: { x: 137, y: 284 }, to: { x: 335, y: 96 }, thickness: 30 },
     { id: 'top-center-arch', kind: 'wall', from: { x: 335, y: 96 }, to: { x: 743, y: 96 }, thickness: 30 },
     { id: 'top-right-arch', kind: 'orbit', from: { x: 743, y: 96 }, to: { x: 938, y: 286 }, thickness: 30 },
     { id: 'left-orbit-inner', kind: 'orbit', from: { x: 204, y: 306 }, to: { x: 174, y: 805 }, thickness: 20 },
-    { id: 'right-orbit-inner', kind: 'orbit', from: { x: 876, y: 306 }, to: { x: 846, y: 805 }, thickness: 20 },
+    { id: 'right-orbit-inner', kind: 'orbit', from: { x: 850, y: 520 }, to: { x: 846, y: 805 }, thickness: 20 },
 
     // RAMP MOUTHS: simple open guides that feed the ball back toward the middle.
     { id: 'left-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 242, y: 846 }, to: { x: 406, y: 756 }, thickness: 22 },
@@ -151,11 +172,9 @@ export const tableLayout = {
     { id: 'left-apron', kind: 'apron', from: { x: 116, y: 1816 }, to: { x: 350, y: 1700 }, thickness: 32 },
     { id: 'right-apron', kind: 'apron', from: { x: 964, y: 1816 }, to: { x: 730, y: 1700 }, thickness: 32 },
 
-    // PLUNGER LANE: right-side launch rail and top deflector into the upper playfield.
-    { id: 'plunger-left-rail', kind: 'plungerLane', from: { x: 924, y: 470 }, to: { x: 924, y: 1820 }, thickness: 18 },
+    // PLUNGER LANE: rails stay intact below the exit; the top exit is open so the sensor can feed into play.
+    { id: 'plunger-left-rail', kind: 'plungerLane', from: { x: 924, y: 500 }, to: { x: 924, y: 1820 }, thickness: 18 },
     { id: 'plunger-right-rail', kind: 'plungerLane', from: { x: 1062, y: 225 }, to: { x: 1062, y: 1845 }, thickness: 26 },
-    { id: 'plunger-exit-guide', kind: 'plungerLane', from: { x: 1048, y: 270 }, to: { x: 902, y: 365 }, thickness: 22 },
-    { id: 'plunger-top-feed', kind: 'plungerLane', from: { x: 928, y: 332 }, to: { x: 784, y: 236 }, thickness: 20 },
     { id: 'plunger-bottom-stop', kind: 'plungerLane', from: { x: 930, y: 1844 }, to: { x: 1060, y: 1844 }, thickness: 24 },
     { id: 'left-flipper-under-guide', kind: 'apron', from: { x: 300, y: 1776 }, to: { x: 454, y: 1718 }, thickness: 24 },
     { id: 'right-flipper-under-guide', kind: 'apron', from: { x: 780, y: 1776 }, to: { x: 626, y: 1718 }, thickness: 24 },
@@ -178,7 +197,14 @@ export const tableLayout = {
   sensors: [
     { id: 'drain', kind: 'drain', x: 540, y: 1878, width: 270, height: 48 },
     { id: 'plunger-ready', kind: 'plungerReady', x: 1000, y: 1718, width: 108, height: 250 },
-    { id: 'shooter-exit', kind: 'shooterExit', x: 992, y: 355, width: 132, height: 150 },
+    {
+      id: 'shooterExitSensor',
+      kind: 'shooterExit',
+      x: shooterExitX,
+      y: shooterExitY,
+      width: shooterExitWidth,
+      height: shooterExitHeight,
+    },
     { id: 'left-target-1', kind: 'targetBank', x: 318, y: 952, width: 32, height: 96, angle: -0.38, score: 250 },
     { id: 'left-target-2', kind: 'targetBank', x: 366, y: 1036, width: 32, height: 96, angle: -0.38, score: 250 },
     { id: 'right-target-1', kind: 'targetBank', x: 762, y: 952, width: 32, height: 96, angle: 0.38, score: 250 },

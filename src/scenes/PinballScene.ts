@@ -456,11 +456,10 @@ export class PinballScene extends Phaser.Scene {
 
   private maybeAssistShooterExit() {
     const shooterExit = tableLayout.sensors.find((sensor) => sensor.kind === 'shooterExit')
-    if (!shooterExit || !this.pointInCenteredRect(this.ball, shooterExit)) {
-      return
-    }
+    const overlapsExitSensor = Boolean(shooterExit && this.pointInCenteredRect(this.ball, shooterExit))
+    const reachedOpenLaneTop = this.ball.x > tableLayout.plunger.laneMinX && this.ball.y < tableLayout.tuning.shooterExitFallbackY
 
-    if (this.ballBody.velocity.y < -3 || this.ball.x > tableLayout.plunger.laneMinX) {
+    if (overlapsExitSensor || reachedOpenLaneTop) {
       this.feedShooterExit()
     }
   }
@@ -471,9 +470,10 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.lastShooterExitAt = this.time.now
-    const force = tableLayout.tuning.shooterExitForce
-    // TUNING: shooterExitForce should be mostly leftward with a small upward component.
-    this.ball.setVelocity(this.ballBody.velocity.x + force.x, Math.min(this.ballBody.velocity.y, -4) + force.y)
+    // TUNING: shooterExitRepositionX/Y should sit just left of the shooter lane exit.
+    this.ball.setPosition(tableLayout.tuning.shooterExitRepositionX, tableLayout.tuning.shooterExitRepositionY)
+    this.ball.setVelocity(tableLayout.tuning.shooterExitVelocityX, tableLayout.tuning.shooterExitVelocityY)
+    this.ball.setAngularVelocity(0)
   }
 
   private addScore(points: number) {
@@ -585,6 +585,13 @@ export class PinballScene extends Phaser.Scene {
       .forEach((target) => {
         graphics.fillStyle(0x7cf7ff, 0.2)
         graphics.fillRect(target.x - target.width / 2, target.y - target.height / 2, target.width, target.height)
+      })
+
+    tableLayout.sensors
+      .filter((sensor) => sensor.kind === 'shooterExit')
+      .forEach((sensor) => {
+        graphics.lineStyle(3, 0xffd166, 0.35)
+        graphics.strokeRect(sensor.x - sensor.width / 2, sensor.y - sensor.height / 2, sensor.width, sensor.height)
       })
   }
 
