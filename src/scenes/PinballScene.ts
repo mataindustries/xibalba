@@ -15,6 +15,7 @@ type FlipperRuntime = {
   body: MatterJS.BodyType
   visual: Phaser.GameObjects.Rectangle
   currentAngle: number
+  lastImpulseAt: number
   pressed: boolean
 }
 
@@ -44,6 +45,7 @@ export class PinballScene extends Phaser.Scene {
   private plungerCharge = 0
   private plungerHeld = false
   private lastKeyboardPlunger = false
+  private lastShooterExitAt = 0
   private debugEnabled = false
 
   constructor() {
@@ -88,6 +90,7 @@ export class PinballScene extends Phaser.Scene {
     this.updateKeyboardState()
     this.updateFlippers(delta)
     this.updatePlunger()
+    this.maybeAssistShooterExit()
     this.keepBallPlayable()
 
     if (this.debugEnabled) {
@@ -161,7 +164,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private createFlipper(config: FlipperConfig) {
-    const angle = Phaser.Math.DegToRad(config.restAngle)
+    const angle = Phaser.Math.DegToRad(tableLayout.tuning.flipperRestAngle[config.id])
     const center = this.pointFromPivot(config.pivot, angle, config.length / 2)
     const body = this.matter.add.rectangle(center.x, center.y, config.length, config.width, {
       isStatic: true,
@@ -179,7 +182,7 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(7)
     visual.rotation = angle
 
-    this.flippers.push({ config, body, visual, currentAngle: angle, pressed: false })
+    this.flippers.push({ config, body, visual, currentAngle: angle, lastImpulseAt: 0, pressed: false })
     this.collisionBodies.push(body)
     return body
   }
@@ -232,7 +235,7 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(40)
 
     this.add
-      .text(24, 59, 'LEFT/A + RIGHT/L flippers   SPACE/DOWN launch   R reset   D debug', {
+      .text(24, 59, 'LEFT/A + RIGHT/D flippers   SPACE/DOWN launch   R reset   B debug', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '15px',
         color: '#8af8ff',
@@ -249,11 +252,11 @@ export class PinballScene extends Phaser.Scene {
         left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
         leftAlt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
         right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-        rightAlt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
+        rightAlt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
         plunger: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         plungerAlt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
         reset: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R),
-        debug: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+        debug: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B),
       }
     }
 
@@ -307,6 +310,11 @@ export class PinballScene extends Phaser.Scene {
 
     if (label.startsWith('drain:')) {
       this.time.delayedCall(120, () => this.resetBall())
+      return
+    }
+
+    if (label.startsWith('shooterExit:')) {
+      this.feedShooterExit()
     }
   }
 
@@ -344,8 +352,10 @@ export class PinballScene extends Phaser.Scene {
     const deltaScale = Math.max(0.5, Math.min(2, delta / 16.6667))
 
     this.flippers.forEach((flipper) => {
-      const targetAngle = Phaser.Math.DegToRad(flipper.pressed ? flipper.config.activeAngle : flipper.config.restAngle)
-      const angularSpeed = flipper.pressed ? tableLayout.tuning.flipperUpSpeed : tableLayout.tuning.flipperDownSpeed
+      const targetAngle = Phaser.Math.DegToRad(
+        flipper.pressed ? tableLayout.tuning.flipperActiveAngle[flipper.config.id] : tableLayout.tuning.flipperRestAngle[flipper.config.id],
+      )
+      const angularSpeed = flipper.pressed ? tableLayout.tuning.flipperSpeed : tableLayout.tuning.flipperReturnSpeed
       const step = angularSpeed * deltaScale
       const angleDelta = Phaser.Math.Angle.Wrap(targetAngle - flipper.currentAngle)
 
@@ -357,11 +367,12 @@ export class PinballScene extends Phaser.Scene {
 
       const center = this.pointFromPivot(flipper.config.pivot, flipper.currentAngle, flipper.config.length / 2)
 
-      // TUNING: flipperUpSpeed/flipperDownSpeed control snap and return. The body is a real rotating Matter body.
+      // TUNING: flipperSpeed/flipperReturnSpeed set snap/return; flipperImpulse controls contact kick.
       this.matter.body.setPosition(flipper.body, center, true)
       this.matter.body.setAngle(flipper.body, flipper.currentAngle, true)
       flipper.visual.setPosition(center.x, center.y)
       flipper.visual.rotation = flipper.currentAngle
+      this.maybeApplyFlipperImpulse(flipper)
     })
   }
 
@@ -380,13 +391,9 @@ export class PinballScene extends Phaser.Scene {
 
     this.plungerHeld = false
     if (this.isBallInPlungerLane()) {
-      const charge = Math.max(0.22, this.plungerCharge)
-      const launchY = -Phaser.Math.Linear(
-        tableLayout.tuning.plungerLaunchMinVelocity,
-        tableLayout.tuning.plungerLaunchMaxVelocity,
-        charge,
-      )
-      this.ball.setVelocity(tableLayout.tuning.plungerLaunchSideVelocity, launchY)
+      const launchVelocity = Phaser.Math.Linear(tableLayout.tuning.plungerTapForce, tableLayout.tuning.plungerForce, Math.max(0.12, this.plungerCharge))
+      this.ball.setPosition(tableLayout.plunger.x, this.ball.y)
+      this.ball.setVelocity(0, -launchVelocity)
       this.ball.setAngularVelocity(0)
     }
     this.plungerCharge = 0
@@ -444,7 +451,29 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private isBallInPlungerLane() {
-    return this.ball.x > 920 && this.ball.y > tableLayout.plunger.launchMinY
+    return this.ball.x > tableLayout.plunger.laneMinX && this.ball.y > tableLayout.plunger.launchMinY
+  }
+
+  private maybeAssistShooterExit() {
+    const shooterExit = tableLayout.sensors.find((sensor) => sensor.kind === 'shooterExit')
+    if (!shooterExit || !this.pointInCenteredRect(this.ball, shooterExit)) {
+      return
+    }
+
+    if (this.ballBody.velocity.y < -3 || this.ball.x > tableLayout.plunger.laneMinX) {
+      this.feedShooterExit()
+    }
+  }
+
+  private feedShooterExit() {
+    if (this.time.now - this.lastShooterExitAt < tableLayout.tuning.shooterExitCooldownMs) {
+      return
+    }
+
+    this.lastShooterExitAt = this.time.now
+    const force = tableLayout.tuning.shooterExitForce
+    // TUNING: shooterExitForce should be mostly leftward with a small upward component.
+    this.ball.setVelocity(this.ballBody.velocity.x + force.x, Math.min(this.ballBody.velocity.y, -4) + force.y)
   }
 
   private addScore(points: number) {
@@ -461,6 +490,30 @@ export class PinballScene extends Phaser.Scene {
     const dy = this.ballBody.position.y - origin.y
     const distance = Math.max(1, Math.hypot(dx, dy))
     this.applyBallForce((dx / distance) * force, (dy / distance) * force)
+  }
+
+  private maybeApplyFlipperImpulse(flipper: FlipperRuntime) {
+    if (!flipper.pressed || this.time.now - flipper.lastImpulseAt < tableLayout.tuning.flipperImpulseCooldownMs) {
+      return
+    }
+
+    const segmentStart = flipper.config.pivot
+    const segmentEnd = this.pointFromPivot(flipper.config.pivot, flipper.currentAngle, flipper.config.length)
+    const closest = this.closestPointOnSegment(this.ballBody.position, segmentStart, segmentEnd)
+    const hitRange = tableLayout.ball.radius + flipper.config.width / 2 + tableLayout.tuning.flipperContactRadius
+
+    if (closest.distance > hitRange) {
+      return
+    }
+
+    flipper.lastImpulseAt = this.time.now
+    const side = flipper.config.id === 'left' ? 1 : -1
+    const tipPower = 0.75 + closest.t * 0.55
+    const impulse = tableLayout.tuning.flipperImpulse * tipPower
+    const nextVelocityX = Phaser.Math.Clamp(this.ballBody.velocity.x + side * impulse * 0.5, -34, 34)
+    const nextVelocityY = Math.min(this.ballBody.velocity.y, -3) - impulse
+
+    this.ball.setVelocity(nextVelocityX, nextVelocityY)
   }
 
   private segmentTransform(from: Point, to: Point) {
@@ -495,6 +548,32 @@ export class PinballScene extends Phaser.Scene {
       point.y >= rect.y &&
       point.y <= rect.y + rect.height
     )
+  }
+
+  private pointInCenteredRect(point: Point, rect: { x: number; y: number; width: number; height: number }) {
+    return (
+      point.x >= rect.x - rect.width / 2 &&
+      point.x <= rect.x + rect.width / 2 &&
+      point.y >= rect.y - rect.height / 2 &&
+      point.y <= rect.y + rect.height / 2
+    )
+  }
+
+  private closestPointOnSegment(point: Point, start: Point, end: Point) {
+    const dx = end.x - start.x
+    const dy = end.y - start.y
+    const lengthSquared = dx * dx + dy * dy
+    const rawT = lengthSquared === 0 ? 0 : ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared
+    const t = Phaser.Math.Clamp(rawT, 0, 1)
+    const x = start.x + dx * t
+    const y = start.y + dy * t
+
+    return {
+      x,
+      y,
+      t,
+      distance: Math.hypot(point.x - x, point.y - y),
+    }
   }
 
   private drawPlaceholderPlayfield() {

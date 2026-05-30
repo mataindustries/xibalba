@@ -18,7 +18,7 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   physics: {
     default: 'matter',
     matter: {
-      gravity: { x: 0, y: tableLayout.physics.gravityY },
+      gravity: { x: 0, y: tableLayout.tuning.gravity },
       positionIterations: tableLayout.physics.solverIterations,
       velocityIterations: tableLayout.physics.solverIterations,
       debug: false,

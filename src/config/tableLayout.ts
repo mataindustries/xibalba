@@ -33,7 +33,7 @@ export type RoundedPost = {
 
 export type SensorBody = {
   id: string
-  kind: 'drain' | 'targetBank' | 'plungerReady'
+  kind: 'drain' | 'targetBank' | 'plungerReady' | 'shooterExit'
   x: number
   y: number
   width: number
@@ -64,8 +64,6 @@ export type FlipperConfig = {
   pivot: Point
   length: number
   width: number
-  restAngle: number
-  activeAngle: number
 }
 
 export const tableLayout = {
@@ -79,26 +77,34 @@ export const tableLayout = {
   },
 
   physics: {
-    gravityY: 1.08,
     solverIterations: 12,
   },
 
-  // TUNING: table feel. Start here for broad gameplay changes before moving coordinates.
+  // TUNING: core table feel. Increase gravity/force/speed in small steps; these values drive the real mechanics.
   tuning: {
-    ballBounce: 0.62,
+    gravity: 1.12,
+    ballBounce: 0.66,
     ballFriction: 0.0025,
-    ballFrictionAir: 0.0024,
-    wallBounce: 0.32,
-    rubberBounce: 0.88,
+    ballFrictionAir: 0.002,
+    wallBounce: 0.36,
+    rubberBounce: 0.9,
     bumperBounce: 1.08,
     bumperForce: 0.066,
     slingForceScale: 0.06,
-    flipperUpSpeed: 0.42,
-    flipperDownSpeed: 0.24,
-    plungerLaunchMinVelocity: 22,
-    plungerLaunchMaxVelocity: 44,
-    plungerLaunchSideVelocity: -2.4,
-    plungerChargeRate: 0.022,
+    // TUNING: left/right flipper angles are degrees in the 1080x1920 table coordinate space.
+    flipperRestAngle: { left: -22, right: 202 },
+    flipperActiveAngle: { left: -74, right: 254 },
+    flipperSpeed: 0.52,
+    flipperReturnSpeed: 0.26,
+    flipperImpulse: 15.5,
+    flipperContactRadius: 34,
+    flipperImpulseCooldownMs: 85,
+    // TUNING: plungerForce is max launch velocity; shooterExitForce kicks the ball out of the lane.
+    plungerTapForce: 22,
+    plungerForce: 38,
+    plungerChargeRate: 0.024,
+    shooterExitForce: { x: -18, y: -6 },
+    shooterExitCooldownMs: 150,
   },
 
   ball: {
@@ -114,8 +120,8 @@ export const tableLayout = {
     width: 42,
     height: 94,
     chargeTravel: 72,
+    laneMinX: 920,
     launchMinY: 1330,
-    launchVector: { x: -0.022, y: -1 },
     touchArea: { x: 875, y: 1270, width: 205, height: 650 },
   },
 
@@ -146,10 +152,13 @@ export const tableLayout = {
     { id: 'right-apron', kind: 'apron', from: { x: 964, y: 1816 }, to: { x: 730, y: 1700 }, thickness: 32 },
 
     // PLUNGER LANE: right-side launch rail and top deflector into the upper playfield.
-    { id: 'plunger-left-rail', kind: 'plungerLane', from: { x: 924, y: 520 }, to: { x: 924, y: 1820 }, thickness: 18 },
+    { id: 'plunger-left-rail', kind: 'plungerLane', from: { x: 924, y: 470 }, to: { x: 924, y: 1820 }, thickness: 18 },
     { id: 'plunger-right-rail', kind: 'plungerLane', from: { x: 1062, y: 225 }, to: { x: 1062, y: 1845 }, thickness: 26 },
-    { id: 'plunger-top-feed', kind: 'plungerLane', from: { x: 928, y: 332 }, to: { x: 784, y: 236 }, thickness: 22 },
+    { id: 'plunger-exit-guide', kind: 'plungerLane', from: { x: 1048, y: 270 }, to: { x: 902, y: 365 }, thickness: 22 },
+    { id: 'plunger-top-feed', kind: 'plungerLane', from: { x: 928, y: 332 }, to: { x: 784, y: 236 }, thickness: 20 },
     { id: 'plunger-bottom-stop', kind: 'plungerLane', from: { x: 930, y: 1844 }, to: { x: 1060, y: 1844 }, thickness: 24 },
+    { id: 'left-flipper-under-guide', kind: 'apron', from: { x: 300, y: 1776 }, to: { x: 454, y: 1718 }, thickness: 24 },
+    { id: 'right-flipper-under-guide', kind: 'apron', from: { x: 780, y: 1776 }, to: { x: 626, y: 1718 }, thickness: 24 },
   ] satisfies WallSegment[],
 
   // ROUNDED POSTS: reduce sharp-corner traps around slings, lane entrances, and ramp mouths.
@@ -169,6 +178,7 @@ export const tableLayout = {
   sensors: [
     { id: 'drain', kind: 'drain', x: 540, y: 1878, width: 270, height: 48 },
     { id: 'plunger-ready', kind: 'plungerReady', x: 1000, y: 1718, width: 108, height: 250 },
+    { id: 'shooter-exit', kind: 'shooterExit', x: 992, y: 355, width: 132, height: 150 },
     { id: 'left-target-1', kind: 'targetBank', x: 318, y: 952, width: 32, height: 96, angle: -0.38, score: 250 },
     { id: 'left-target-2', kind: 'targetBank', x: 366, y: 1036, width: 32, height: 96, angle: -0.38, score: 250 },
     { id: 'right-target-1', kind: 'targetBank', x: 762, y: 952, width: 32, height: 96, angle: 0.38, score: 250 },
@@ -208,16 +218,12 @@ export const tableLayout = {
       pivot: { x: 382, y: 1678 },
       length: 158,
       width: 30,
-      restAngle: -21,
-      activeAngle: -72,
     },
     {
       id: 'right',
       pivot: { x: 698, y: 1678 },
       length: 158,
       width: 30,
-      restAngle: 201,
-      activeAngle: 252,
     },
   ] satisfies FlipperConfig[],
 }
