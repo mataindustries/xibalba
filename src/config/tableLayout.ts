@@ -90,29 +90,31 @@ export const tableLayout = {
     solverIterations: 12,
   },
 
-  // TUNING: core table feel. Increase gravity/force/speed in small steps; these values drive the real mechanics.
+  // TUNING: core table feel. Gravity and friction control table speed and ball slowdown.
   tuning: {
-    gravity: 1.12,
-    ballBounce: 0.66,
-    ballFriction: 0.0025,
-    ballFrictionAir: 0.002,
-    wallBounce: 0.36,
-    rubberBounce: 0.9,
-    bumperBounce: 1.08,
-    bumperForce: 0.066,
-    slingForceScale: 0.06,
-    // TUNING: left/right flipper angles are degrees in the 1080x1920 table coordinate space.
+    gravity: 1.08,
+    ballBounce: 0.69,
+    ballFriction: 0.002,
+    ballFrictionAir: 0.0016,
+    wallBounce: 0.4,
+    rubberBounce: 0.93,
+    // TUNING: bumperBounce and bumperForce control pop-bumper rebound and added kick.
+    bumperBounce: 1.12,
+    bumperForce: 0.074,
+    // TUNING: slingForceScale controls slingshot kick strength.
+    slingForceScale: 0.064,
+    // TUNING: flipper angles/speeds/impulse control shot power, timing, and return feel.
     flipperRestAngle: { left: -16, right: 196 },
-    flipperActiveAngle: { left: -70, right: 250 },
-    flipperSpeed: 0.52,
-    flipperReturnSpeed: 0.26,
-    flipperImpulse: 15.5,
-    flipperContactRadius: 34,
-    flipperImpulseCooldownMs: 85,
-    // TUNING: plungerForce is max launch velocity.
-    plungerTapForce: 22,
-    plungerForce: 38,
-    plungerChargeRate: 0.024,
+    flipperActiveAngle: { left: -72, right: 252 },
+    flipperSpeed: 0.58,
+    flipperReturnSpeed: 0.32,
+    flipperImpulse: 17.2,
+    flipperContactRadius: 36,
+    flipperImpulseCooldownMs: 72,
+    // TUNING: plungerForce is max launch velocity; shooterExit values control lane feed into play.
+    plungerTapForce: 23,
+    plungerForce: 37,
+    plungerChargeRate: 0.028,
     shooterExitCooldownMs: 150,
     // TUNING: shooter-lane exit. Keep the sensor near x 965, y 250-400.
     // If the ball sticks, enlarge/move the sensor or move repositionX slightly left.
