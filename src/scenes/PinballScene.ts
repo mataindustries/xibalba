@@ -29,9 +29,20 @@ type ControlKeys = {
   plungerAlt: Phaser.Input.Keyboard.Key
   reset: Phaser.Input.Keyboard.Key
   debug: Phaser.Input.Keyboard.Key
+  testMode: Phaser.Input.Keyboard.Key
+  clearVelocity: Phaser.Input.Keyboard.Key
+  shift: Phaser.Input.Keyboard.Key
+  one: Phaser.Input.Keyboard.Key
+  two: Phaser.Input.Keyboard.Key
+  three: Phaser.Input.Keyboard.Key
+  four: Phaser.Input.Keyboard.Key
+  five: Phaser.Input.Keyboard.Key
 }
 
 type ComboHitKind = 'bumper' | 'sling' | 'targetOrLane'
+
+type ShotTestPlacement = 'leftFlipper' | 'rightFlipper' | 'centerLower' | 'shooterExit' | 'upperRollovers'
+type ShotTestLaunch = 'leftUpper' | 'rightUpper' | 'centerJackpot'
 
 type ScorePopupOptions = {
   major?: boolean
@@ -49,6 +60,7 @@ export class PinballScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text
   private ballStateText!: Phaser.GameObjects.Text
   private rolloverText!: Phaser.GameObjects.Text
+  private shotTestText!: Phaser.GameObjects.Text
   private keys?: ControlKeys
   private bumperVisuals = new Map<string, Phaser.GameObjects.Arc>()
   private slingVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
@@ -69,6 +81,9 @@ export class PinballScene extends Phaser.Scene {
   private lastComboAt = 0
   private lastLaneComboAt = 0
   private debugEnabled = false
+  private shotTestMode = false
+  private lastSensorHit = 'none'
+  private lastScoreEvent = 'none'
 
   constructor() {
     super('PinballScene')
@@ -122,6 +137,10 @@ export class PinballScene extends Phaser.Scene {
 
     if (this.debugEnabled) {
       this.drawDebugOverlay()
+    }
+
+    if (this.shotTestMode) {
+      this.updateShotTestOverlay()
     }
   }
 
@@ -334,6 +353,18 @@ export class PinballScene extends Phaser.Scene {
       })
       .setDepth(40)
       .setAlpha(0.9)
+
+    this.shotTestText = this.add
+      .text(24, 147, '', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '14px',
+        color: '#f4fbff',
+        stroke: '#071018',
+        strokeThickness: 4,
+        lineSpacing: 4,
+      })
+      .setDepth(46)
+      .setVisible(false)
   }
 
   private bindInput() {
@@ -347,6 +378,14 @@ export class PinballScene extends Phaser.Scene {
         plungerAlt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
         reset: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R),
         debug: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B),
+        testMode: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T),
+        clearVelocity: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C),
+        shift: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
+        one: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
+        two: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
+        three: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
+        four: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR),
+        five: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE),
       }
     }
 
@@ -374,6 +413,10 @@ export class PinballScene extends Phaser.Scene {
 
   private handleBallCollision(otherBody: MatterJS.BodyType) {
     const label = otherBody.label
+
+    if (otherBody.isSensor) {
+      this.lastSensorHit = label
+    }
 
     if (label.startsWith('bumper:')) {
       const bumper = tableLayout.bumpers.find((item) => label === `bumper:${item.id}`)
@@ -467,6 +510,142 @@ export class PinballScene extends Phaser.Scene {
       if (!this.debugEnabled) {
         this.debugGraphics.clear()
       }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.testMode)) {
+      this.setShotTestMode(!this.shotTestMode)
+    }
+
+    if (this.shotTestMode) {
+      this.handleShotTestInput()
+    }
+  }
+
+  private setShotTestMode(enabled: boolean) {
+    this.shotTestMode = enabled
+    this.shotTestText.setVisible(enabled)
+    if (!enabled) {
+      this.shotTestText.setText('')
+    }
+  }
+
+  private handleShotTestInput() {
+    if (!this.keys) {
+      return
+    }
+
+    const shiftHeld = this.keys.shift.isDown
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.clearVelocity)) {
+      this.clearBallVelocity()
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.one)) {
+      if (shiftHeld) {
+        this.launchShotTestBall('leftUpper')
+      } else {
+        this.placeShotTestBall('leftFlipper')
+      }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.two)) {
+      if (shiftHeld) {
+        this.launchShotTestBall('rightUpper')
+      } else {
+        this.placeShotTestBall('rightFlipper')
+      }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.three)) {
+      if (shiftHeld) {
+        this.launchShotTestBall('centerJackpot')
+      } else {
+        this.placeShotTestBall('centerLower')
+      }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.four)) {
+      this.placeShotTestBall('shooterExit')
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.five)) {
+      this.placeShotTestBall('upperRollovers')
+    }
+  }
+
+  private placeShotTestBall(placement: ShotTestPlacement) {
+    this.setBallForShotTest(this.shotTestPosition(placement), { x: 0, y: 0 })
+  }
+
+  private launchShotTestBall(launch: ShotTestLaunch) {
+    const shot = this.shotTestLaunch(launch)
+    this.setBallForShotTest(shot.position, shot.velocity)
+  }
+
+  private clearBallVelocity() {
+    this.ball.setVelocity(0, 0)
+    this.ball.setAngularVelocity(0)
+    this.lastBallMotionAt = this.time.now
+  }
+
+  private setBallForShotTest(position: Point, velocity: Point) {
+    this.ball.setPosition(position.x, position.y)
+    this.ball.setVelocity(velocity.x, velocity.y)
+    this.ball.setAngularVelocity(0)
+    this.plungerHeld = false
+    this.plungerCharge = 0
+    this.drainResetPending = false
+    this.lastBallMotionAt = this.time.now
+    this.setBallState(this.isBallInPlungerLane() ? 'PLUNGER' : 'IN PLAY')
+  }
+
+  private shotTestPosition(placement: ShotTestPlacement): Point {
+    switch (placement) {
+      case 'leftFlipper':
+        return this.flipperCradlePosition('left')
+      case 'rightFlipper':
+        return this.flipperCradlePosition('right')
+      case 'centerLower':
+        return { x: tableLayout.table.width / 2, y: 1375 }
+      case 'shooterExit':
+        return { x: tableLayout.tuning.shooterExitRepositionX, y: tableLayout.tuning.shooterExitRepositionY }
+      case 'upperRollovers':
+        return { x: tableLayout.table.width / 2, y: 830 }
+    }
+  }
+
+  private shotTestLaunch(launch: ShotTestLaunch): { position: Point; velocity: Point } {
+    switch (launch) {
+      case 'leftUpper':
+        return {
+          position: this.shotTestPosition('leftFlipper'),
+          velocity: { x: 15, y: -34 },
+        }
+      case 'rightUpper':
+        return {
+          position: this.shotTestPosition('rightFlipper'),
+          velocity: { x: -15, y: -34 },
+        }
+      case 'centerJackpot':
+        return {
+          position: this.shotTestPosition('centerLower'),
+          velocity: { x: 0, y: -36 },
+        }
+    }
+  }
+
+  private flipperCradlePosition(id: 'left' | 'right'): Point {
+    const config = tableLayout.flippers.find((flipper) => flipper.id === id)
+    if (!config) {
+      return { x: tableLayout.table.width / 2, y: 1625 }
+    }
+
+    const restAngle = Phaser.Math.DegToRad(tableLayout.tuning.flipperRestAngle[id])
+    const centerline = this.pointFromPivot(config.pivot, restAngle, config.length * 0.58)
+
+    return {
+      x: centerline.x,
+      y: centerline.y - tableLayout.ball.radius - config.width * 0.35,
     }
   }
 
@@ -641,6 +820,7 @@ export class PinballScene extends Phaser.Scene {
       }
 
       this.lastTrapKickAt.set(zone.id, this.time.now)
+      this.lastSensorHit = `trapKicker:${zone.id}`
       if (zone.reposition) {
         this.ball.setPosition(zone.reposition.x, zone.reposition.y)
       }
@@ -656,6 +836,7 @@ export class PinballScene extends Phaser.Scene {
     const reachedOpenLaneTop = this.ball.x > tableLayout.plunger.laneMinX && this.ball.y < tableLayout.tuning.shooterExitFallbackY
 
     if (overlapsExitSensor || reachedOpenLaneTop) {
+      this.lastSensorHit = overlapsExitSensor && shooterExit ? `shooterExit:${shooterExit.id}` : 'shooterExit:fallback'
       this.feedShooterExit()
     }
   }
@@ -791,6 +972,10 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private showScorePopup(x: number, y: number, label: string, points?: number, options: ScorePopupOptions = {}) {
+    if (points !== undefined) {
+      this.lastScoreEvent = `${label} +${points}`
+    }
+
     const popupRise = options.major ? tableLayout.tuning.majorScorePopupRise : tableLayout.tuning.scorePopupRise
     const popupDuration = options.major ? tableLayout.tuning.majorScorePopupDurationMs : tableLayout.tuning.scorePopupDurationMs
     const fontSize = options.major ? tableLayout.tuning.majorScorePopupFontSize : tableLayout.tuning.scorePopupFontSize
@@ -930,6 +1115,74 @@ export class PinballScene extends Phaser.Scene {
       t,
       distance: Math.hypot(point.x - x, point.y - y),
     }
+  }
+
+  private updateShotTestOverlay() {
+    const velocity = this.ballBody.velocity
+    const stuckSeconds = this.stuckTimerMs() / 1000
+    this.shotTestText.setText(
+      [
+        'SHOT TEST MODE  1-5 place  Shift+1-3 shot  C clear',
+        `BALL x ${this.formatTelemetryNumber(this.ball.x)}  y ${this.formatTelemetryNumber(this.ball.y)}`,
+        `VEL  x ${this.formatTelemetryNumber(velocity.x)}  y ${this.formatTelemetryNumber(velocity.y)}`,
+        `ZONE ${this.currentZone()}`,
+        `LAST SENSOR ${this.lastSensorHit}`,
+        `LAST SCORE ${this.lastScoreEvent}`,
+        `STUCK ${stuckSeconds.toFixed(2)}s`,
+      ].join('\n'),
+    )
+  }
+
+  private currentZone() {
+    const outOfBounds = this.ball.x < 0 || this.ball.x > tableLayout.table.width || this.ball.y < 0 || this.ball.y > tableLayout.table.height
+    if (outOfBounds) {
+      return 'out of bounds'
+    }
+
+    const sensor = tableLayout.sensors.find((item) => this.pointInCenteredRect(this.ball, item))
+    if (sensor) {
+      return `${sensor.kind}:${sensor.id}`
+    }
+
+    const trapKicker = tableLayout.trapKickers.find((zone) => this.pointInCenteredRect(this.ball, zone))
+    if (trapKicker) {
+      return `trapKicker:${trapKicker.id}`
+    }
+
+    if (this.isBallInPlungerLane()) {
+      return 'plunger lane'
+    }
+
+    if (this.ball.y < 860) {
+      return 'upper playfield'
+    }
+
+    if (this.ball.y < 1320) {
+      return 'middle playfield'
+    }
+
+    if (this.ball.y < 1740) {
+      return 'lower playfield'
+    }
+
+    return 'drain apron'
+  }
+
+  private stuckTimerMs() {
+    if (this.ballState === 'DRAINED' || this.isBallInPlungerLane()) {
+      return 0
+    }
+
+    const speed = Math.hypot(this.ballBody.velocity.x, this.ballBody.velocity.y)
+    if (speed > tableLayout.tuning.stuckVelocityThreshold) {
+      return 0
+    }
+
+    return Math.max(0, this.time.now - this.lastBallMotionAt)
+  }
+
+  private formatTelemetryNumber(value: number) {
+    return value.toFixed(1).padStart(6, ' ')
   }
 
   private drawPlaceholderPlayfield() {
