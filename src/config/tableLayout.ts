@@ -114,11 +114,11 @@ export const tableLayout = {
     // TUNING: slingForceScale controls slingshot kick strength.
     slingForceScale: 0.064,
     // TUNING: flipper angles/speeds/impulse control shot power, timing, and return feel.
-    flipperRestAngle: { left: -16, right: 196 },
-    flipperActiveAngle: { left: -76, right: 256 },
+    flipperRestAngle: { left: -18, right: 198 },
+    flipperActiveAngle: { left: -80, right: 260 },
     flipperSpeed: 0.64,
-    flipperReturnSpeed: 0.34,
-    flipperImpulse: 19.8,
+    flipperReturnSpeed: 0.36,
+    flipperImpulse: 20.4,
     flipperContactRadius: 40,
     flipperImpulseCooldownMs: 72,
     // TUNING: plungerForce is max launch velocity; shooterExit values control lane feed into play.
