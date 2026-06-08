@@ -50,12 +50,14 @@ type ControlKeys = {
 
 type ComboHitKind = 'bumper' | 'sling' | 'targetOrLane'
 type EclipseState = 'NORMAL' | 'ECLIPSE READY' | 'ECLIPSE MULTIBALL'
+type SoundCue = keyof typeof tableLayout.juice.sounds
 
 type ShotTestPlacement = 'leftFlipper' | 'rightFlipper' | 'centerLower' | 'shooterExit' | 'upperRollovers'
 type ShotTestLaunch = 'leftUpper' | 'rightUpper' | 'centerJackpot'
 
 type ScorePopupOptions = {
   major?: boolean
+  event?: boolean
   color?: string
 }
 
@@ -98,6 +100,8 @@ export class PinballScene extends Phaser.Scene {
   private eclipseState: EclipseState = 'NORMAL'
   private lastSensorHit = 'none'
   private lastScoreEvent = 'none'
+  private audioContext?: AudioContext
+  private lastTrailAt = 0
 
   constructor() {
     super('PinballScene')
@@ -148,6 +152,7 @@ export class PinballScene extends Phaser.Scene {
     this.updateAntiStuck()
     this.keepBallPlayable()
     this.updateBallSaverUi()
+    this.updateMultiballTrail()
 
     if (this.debugEnabled) {
       this.drawDebugOverlay()
@@ -434,6 +439,7 @@ export class PinballScene extends Phaser.Scene {
         five: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE),
         multiball: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M),
       }
+      this.input.keyboard.on('keydown', () => this.unlockAudio())
     }
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.handlePointerDown(pointer))
@@ -461,6 +467,116 @@ export class PinballScene extends Phaser.Scene {
     )
   }
 
+  private ensureAudioContext() {
+    if (this.audioContext) {
+      return this.audioContext
+    }
+
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const audioWindow = window as typeof window & { webkitAudioContext?: typeof AudioContext }
+    const AudioContextConstructor = window.AudioContext ?? audioWindow.webkitAudioContext
+    if (!AudioContextConstructor) {
+      return undefined
+    }
+
+    this.audioContext = new AudioContextConstructor()
+    return this.audioContext
+  }
+
+  private unlockAudio() {
+    const context = this.ensureAudioContext()
+    if (context?.state === 'suspended') {
+      void context.resume()
+    }
+  }
+
+  private playSound(cue: SoundCue) {
+    // SOUND: generated Web Audio tones keep the prototype self-contained until final audio assets exist.
+    const context = this.ensureAudioContext()
+    if (!context) {
+      return
+    }
+
+    if (context.state === 'suspended') {
+      void context.resume()
+    }
+
+    const now = context.currentTime
+    tableLayout.juice.sounds[cue].forEach((tone) => {
+      const timedTone = tone as typeof tone & { delayMs?: number }
+      const start = now + (timedTone.delayMs ?? 0) / 1000
+      const duration = tone.durationMs / 1000
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      oscillator.type = tone.type as OscillatorType
+      oscillator.frequency.setValueAtTime(tone.frequency, start)
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, tableLayout.juice.soundVolume * tone.volume), start + 0.012)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration)
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start(start)
+      oscillator.stop(start + duration + 0.02)
+    })
+  }
+
+  private shakeCamera(kind: keyof typeof tableLayout.juice.screenShake) {
+    const shake = tableLayout.juice.screenShake[kind]
+    this.cameras.main.shake(shake.durationMs, shake.intensity)
+  }
+
+  private flashCircle(x: number, y: number, radius: number, color: number, duration = tableLayout.juice.flashDurationMs) {
+    const flash = this.add
+      .circle(x, y, radius, color, tableLayout.juice.flashAlpha * 0.34)
+      .setStrokeStyle(5, color, 0.82)
+      .setDepth(8)
+      .setAlpha(1)
+
+    this.tweens.add({
+      targets: flash,
+      scaleX: 1.9,
+      scaleY: 1.9,
+      alpha: 0,
+      duration,
+      ease: 'Sine.easeOut',
+      onComplete: () => flash.destroy(),
+    })
+  }
+
+  private flashRectangle(x: number, y: number, width: number, height: number, color: number, duration = tableLayout.juice.flashDurationMs) {
+    const flash = this.add
+      .rectangle(x, y, width, height, color, tableLayout.juice.flashAlpha * 0.42)
+      .setStrokeStyle(5, color, 0.82)
+      .setDepth(8)
+
+    this.tweens.add({
+      targets: flash,
+      scaleX: 1.35,
+      scaleY: 1.35,
+      alpha: 0,
+      duration,
+      ease: 'Sine.easeOut',
+      onComplete: () => flash.destroy(),
+    })
+  }
+
+  private flashPlayfield(color: number) {
+    const flash = this.add
+      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, color, 0.085)
+      .setDepth(8)
+
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: tableLayout.juice.multiballFlashDurationMs,
+      ease: 'Sine.easeOut',
+      onComplete: () => flash.destroy(),
+    })
+  }
+
   private handleBallCollision(ball: BallRuntime, otherBody: MatterJS.BodyType) {
     const label = otherBody.label
 
@@ -471,10 +587,13 @@ export class PinballScene extends Phaser.Scene {
     if (label.startsWith('bumper:')) {
       const bumper = tableLayout.bumpers.find((item) => label === `bumper:${item.id}`)
       const points = bumper?.score ?? 1000
+      this.playSound('bumperHit')
+      this.shakeCamera('bumper')
       this.addScore(points)
       this.showScorePopup(otherBody.position.x, otherBody.position.y - 28, 'BUMPER HIT', points)
       if (bumper) {
-        this.pulse(this.bumperVisuals.get(bumper.id))
+        this.pulse(this.bumperVisuals.get(bumper.id), tableLayout.tuning.pulseScale + 0.1)
+        this.flashCircle(bumper.x, bumper.y, bumper.radius * 1.45, 0x58fff8)
       }
       this.kickBallAwayFrom(ball, otherBody.position, tableLayout.tuning.bumperForce)
       this.registerComboHit('bumper', ball)
@@ -484,6 +603,7 @@ export class PinballScene extends Phaser.Scene {
     if (label.startsWith('sling:')) {
       const sling = tableLayout.slingshots.find((item) => label === `sling:${item.id}`)
       if (sling) {
+        this.playSound('slingHit')
         this.addScore(sling.score)
         this.showScorePopup(otherBody.position.x, otherBody.position.y - 22, 'SLING HIT', sling.score)
         this.pulse(this.slingVisuals.get(sling.id))
@@ -497,6 +617,7 @@ export class PinballScene extends Phaser.Scene {
       const targetId = label.split(':')[1]
       const target = tableLayout.sensors.find((sensor) => sensor.id === targetId)
       const points = target?.score ?? 250
+      this.playSound('targetHit')
       this.addScore(points)
       this.showScorePopup(ball.image.x, ball.image.y - 28, 'TARGET HIT', points)
       this.registerComboHit('targetOrLane', ball)
@@ -761,6 +882,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer) {
+    this.unlockAudio()
     const worldPoint = this.screenToTablePoint(pointer)
     let control: 'left' | 'right' | 'plunger'
 
@@ -1019,6 +1141,7 @@ export class PinballScene extends Phaser.Scene {
     }
 
     // DRAIN: remove only the drained ball; the table resets only when no active balls remain.
+    this.playSound('drain')
     this.showScorePopup(ball.image.x, ball.image.y - 30, 'DRAIN')
     this.removeBall(ball)
     this.checkMultiballEnd()
@@ -1041,7 +1164,11 @@ export class PinballScene extends Phaser.Scene {
 
   private saveDrainedBall(ball: BallRuntime) {
     this.lastScoreEvent = 'BALL SAVE'
-    this.showScorePopup(ball.image.x, ball.image.y - 42, 'BALL SAVE')
+    this.playSound('ballSave')
+    this.showScorePopup(ball.image.x, ball.image.y - 42, 'BALL SAVE', undefined, {
+      event: true,
+      color: '#fff4b0',
+    })
 
     if (this.eclipseState === 'ECLIPSE MULTIBALL' || this.balls.length > 1) {
       this.relaunchSavedBall(ball)
@@ -1066,12 +1193,18 @@ export class PinballScene extends Phaser.Scene {
     const sensor = this.sensorFromLabel(label)
     const points =
       this.eclipseState === 'ECLIPSE MULTIBALL' ? tableLayout.tuning.eclipseMultiballJackpotScore : sensor?.score ?? tableLayout.tuning.jackpotScore
+    this.playSound('jackpot')
+    this.shakeCamera('jackpot')
     this.addScore(points)
     this.showScorePopup(ball.image.x, ball.image.y - 54, 'TEMPLE JACKPOT', points, {
       major: true,
+      event: true,
       color: '#fff4b0',
     })
     this.pulse(this.jackpotVisual, tableLayout.tuning.jackpotPulseScale, tableLayout.tuning.majorScorePopupDurationMs * 0.18)
+    if (sensor) {
+      this.flashRectangle(sensor.x, sensor.y, sensor.width, sensor.height, 0xfff4b0, tableLayout.juice.jackpotFlashDurationMs)
+    }
     this.registerComboHit('targetOrLane', ball)
   }
 
@@ -1082,11 +1215,13 @@ export class PinballScene extends Phaser.Scene {
     }
 
     const points = sensor.score ?? tableLayout.tuning.rolloverScore
+    this.playSound('rolloverHit')
     this.litRollovers.add(sensor.id)
     this.setRolloverVisualLit(sensor.id, true)
     this.addScore(points)
     this.showScorePopup(sensor.x, sensor.y - 30, 'ROLLOVER', points)
     this.pulse(this.rolloverVisuals.get(sensor.id), tableLayout.tuning.rolloverPulseScale)
+    this.flashRectangle(sensor.x, sensor.y, sensor.width, sensor.height, 0x9dffb8)
     this.updateRolloverUi()
 
     if (this.litRollovers.size >= this.rolloverCount()) {
@@ -1097,10 +1232,13 @@ export class PinballScene extends Phaser.Scene {
   private handleRolloverCompletion(sensor: SensorBody) {
     if (this.eclipseState === 'NORMAL') {
       this.setEclipseState('ECLIPSE READY')
+      this.playSound('eclipseReady')
       this.showScorePopup(tableLayout.table.width / 2, sensor.y - 86, 'ECLIPSE READY', undefined, {
         major: true,
+        event: true,
         color: '#9dffb8',
       })
+      this.flashPlayfield(0x9dffb8)
       return
     }
 
@@ -1168,9 +1306,14 @@ export class PinballScene extends Phaser.Scene {
 
     this.setEclipseState('ECLIPSE MULTIBALL')
     this.resetRollovers()
+    this.playSound('eclipseMultiball')
+    this.shakeCamera('multiball')
+    this.flashPlayfield(0x58fff8)
+    this.balls.forEach((ball) => this.flashCircle(ball.image.x, ball.image.y, tableLayout.ball.radius * 2.2, 0x58fff8, tableLayout.juice.jackpotFlashDurationMs))
     this.addScore(tableLayout.tuning.eclipseMultiballStartScore)
     this.showScorePopup(tableLayout.table.width / 2, 650, 'ECLIPSE MULTIBALL', tableLayout.tuning.eclipseMultiballStartScore, {
       major: true,
+      event: true,
       color: '#9dffb8',
     })
     this.activateBallSaver(tableLayout.tuning.eclipseMultiballBallSaveDurationMs)
@@ -1250,9 +1393,21 @@ export class PinballScene extends Phaser.Scene {
       this.lastScoreEvent = `${label} +${points}`
     }
 
-    const popupRise = options.major ? tableLayout.tuning.majorScorePopupRise : tableLayout.tuning.scorePopupRise
-    const popupDuration = options.major ? tableLayout.tuning.majorScorePopupDurationMs : tableLayout.tuning.scorePopupDurationMs
-    const fontSize = options.major ? tableLayout.tuning.majorScorePopupFontSize : tableLayout.tuning.scorePopupFontSize
+    const popupRise = options.event
+      ? tableLayout.tuning.eventScorePopupRise
+      : options.major
+        ? tableLayout.tuning.majorScorePopupRise
+        : tableLayout.tuning.scorePopupRise
+    const popupDuration = options.event
+      ? tableLayout.tuning.eventScorePopupDurationMs
+      : options.major
+        ? tableLayout.tuning.majorScorePopupDurationMs
+        : tableLayout.tuning.scorePopupDurationMs
+    const fontSize = options.event
+      ? tableLayout.tuning.eventScorePopupFontSize
+      : options.major
+        ? tableLayout.tuning.majorScorePopupFontSize
+        : tableLayout.tuning.scorePopupFontSize
     const text = this.add
       .text(x, y, points ? `${label} +${points}` : label, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -1296,6 +1451,35 @@ export class PinballScene extends Phaser.Scene {
     })
   }
 
+  private updateMultiballTrail() {
+    if (this.eclipseState !== 'ECLIPSE MULTIBALL' || this.time.now - this.lastTrailAt < tableLayout.juice.trailIntervalMs) {
+      return
+    }
+
+    this.lastTrailAt = this.time.now
+    this.balls.forEach((ball) => {
+      const trail = this.add
+        .circle(
+          ball.image.x,
+          ball.image.y,
+          tableLayout.ball.radius * tableLayout.juice.trailRadiusScale,
+          0x58fff8,
+          tableLayout.juice.trailAlpha,
+        )
+        .setDepth(9)
+
+      this.tweens.add({
+        targets: trail,
+        scaleX: 0.35,
+        scaleY: 0.35,
+        alpha: 0,
+        duration: tableLayout.juice.trailDurationMs,
+        ease: 'Sine.easeOut',
+        onComplete: () => trail.destroy(),
+      })
+    })
+  }
+
   private applyBallForce(ball: BallRuntime, x: number, y: number) {
     this.matter.body.applyForce(ball.body, ball.body.position, { x, y })
   }
@@ -1331,6 +1515,7 @@ export class PinballScene extends Phaser.Scene {
     const nextVelocityX = Phaser.Math.Clamp(hit.ball.body.velocity.x + side * impulse * 0.5, -34, 34)
     const nextVelocityY = Math.min(hit.ball.body.velocity.y, -3) - impulse
 
+    this.playSound('flipperHit')
     hit.ball.image.setVelocity(nextVelocityX, nextVelocityY)
     hit.ball.lastMotionAt = this.time.now
   }
