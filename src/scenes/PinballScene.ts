@@ -635,6 +635,8 @@ export class PinballScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.handlePointerDown(pointer))
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer))
     this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer))
+    this.input.on('pointerout', (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer))
+    this.input.on('gameout', () => this.releaseAllPointerControls())
   }
 
   private bindCollisions() {
@@ -867,15 +869,14 @@ export class PinballScene extends Phaser.Scene {
     }
 
     if (this.gamePaused) {
-      this.setFlipperPressed('left', false)
-      this.setFlipperPressed('right', false)
+      this.releaseAllPointerControls()
+      this.updateFlipperInputState()
       this.plungerHeld = false
       this.lastKeyboardPlunger = keyboardPlunger
       return
     }
 
-    this.setFlipperPressed('left', this.keys.left.isDown || this.keys.leftAlt.isDown)
-    this.setFlipperPressed('right', this.keys.right.isDown || this.keys.rightAlt.isDown)
+    this.updateFlipperInputState()
 
     if (keyboardPlunger && !this.lastKeyboardPlunger) {
       this.plungerHeld = Boolean(this.plungerBall())
@@ -934,8 +935,8 @@ export class PinballScene extends Phaser.Scene {
     this.pauseOverlay.setVisible(paused)
     this.setGameplayFrozen(paused)
     if (paused) {
-      this.setFlipperPressed('left', false)
-      this.setFlipperPressed('right', false)
+      this.releaseAllPointerControls()
+      this.updateFlipperInputState()
       this.plungerHeld = false
     }
   }
@@ -1192,10 +1193,10 @@ export class PinballScene extends Phaser.Scene {
       this.plungerHeld = true
     } else {
       control = worldPoint.x < tableLayout.table.width / 2 ? 'left' : 'right'
-      this.setFlipperPressed(control, true)
     }
 
     this.pointerControls.set(pointer.id, control)
+    this.updateFlipperInputState()
   }
 
   private handlePointerUp(pointer: Phaser.Input.Pointer) {
@@ -1206,10 +1207,32 @@ export class PinballScene extends Phaser.Scene {
 
     if (control === 'plunger') {
       this.releasePlunger()
-    } else {
-      this.setFlipperPressed(control, false)
     }
     this.pointerControls.delete(pointer.id)
+    this.updateFlipperInputState()
+  }
+
+  private releaseAllPointerControls() {
+    if (this.pointerControls.size === 0) {
+      return
+    }
+
+    const hadPlunger = [...this.pointerControls.values()].includes('plunger')
+    this.pointerControls.clear()
+    if (hadPlunger) {
+      this.releasePlunger()
+    }
+    this.updateFlipperInputState()
+  }
+
+  private updateFlipperInputState() {
+    const keyboardLeft = Boolean(this.keys && (this.keys.left.isDown || this.keys.leftAlt.isDown))
+    const keyboardRight = Boolean(this.keys && (this.keys.right.isDown || this.keys.rightAlt.isDown))
+    const touchLeft = [...this.pointerControls.values()].includes('left')
+    const touchRight = [...this.pointerControls.values()].includes('right')
+
+    this.setFlipperPressed('left', keyboardLeft || touchLeft)
+    this.setFlipperPressed('right', keyboardRight || touchRight)
   }
 
   private setFlipperPressed(id: 'left' | 'right', pressed: boolean) {
@@ -1220,7 +1243,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private resetBall() {
-    this.pointerControls.clear()
+    this.releaseAllPointerControls()
     this.clearAllBalls()
     this.spawnBall(tableLayout.ball.spawn, tableLayout.ball.resetVelocity)
     this.plungerCharge = 0
@@ -1869,8 +1892,8 @@ export class PinballScene extends Phaser.Scene {
 
   private screenToTablePoint(pointer: Phaser.Input.Pointer): Point {
     return {
-      x: pointer.worldX,
-      y: pointer.worldY,
+      x: pointer.x,
+      y: pointer.y,
     }
   }
 

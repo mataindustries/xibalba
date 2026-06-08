@@ -15,6 +15,9 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
     width: tableLayout.table.width,
     height: tableLayout.table.height,
   },
+  input: {
+    activePointers: 3,
+  },
   physics: {
     default: 'matter',
     matter: {
