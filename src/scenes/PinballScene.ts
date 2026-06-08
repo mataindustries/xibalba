@@ -59,6 +59,7 @@ export class PinballScene extends Phaser.Scene {
   private plungerVisual!: Phaser.GameObjects.Rectangle
   private scoreText!: Phaser.GameObjects.Text
   private ballStateText!: Phaser.GameObjects.Text
+  private ballSaveText!: Phaser.GameObjects.Text
   private rolloverText!: Phaser.GameObjects.Text
   private shotTestText!: Phaser.GameObjects.Text
   private keys?: ControlKeys
@@ -75,6 +76,8 @@ export class PinballScene extends Phaser.Scene {
   private lastKeyboardPlunger = false
   private lastBallMotionAt = 0
   private lastShooterExitAt = 0
+  private ballSaveUntil = 0
+  private ballSaverArmed = true
   private drainResetPending = false
   private lastTrapKickAt = new Map<string, number>()
   private comboStep = 0
@@ -134,6 +137,7 @@ export class PinballScene extends Phaser.Scene {
     this.updateTrapKickers()
     this.updateAntiStuck()
     this.keepBallPlayable()
+    this.updateBallSaverUi()
 
     if (this.debugEnabled) {
       this.drawDebugOverlay()
@@ -343,6 +347,18 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(40)
       .setAlpha(0.9)
 
+    this.ballSaveText = this.add
+      .text(tableLayout.table.width - 24, 22, 'BALL SAVE', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '26px',
+        color: '#fff4b0',
+        stroke: '#071018',
+        strokeThickness: 5,
+      })
+      .setOrigin(1, 0)
+      .setDepth(42)
+      .setVisible(false)
+
     this.rolloverText = this.add
       .text(24, 113, `ROLLOVERS 0/${this.rolloverCount()}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -464,6 +480,11 @@ export class PinballScene extends Phaser.Scene {
     }
 
     if (label.startsWith('drain:')) {
+      if (this.isBallSaverActive()) {
+        this.saveDrainedBall()
+        return
+      }
+
       if (!this.drainResetPending) {
         this.drainResetPending = true
         this.setBallState('DRAINED')
@@ -595,6 +616,8 @@ export class PinballScene extends Phaser.Scene {
     this.plungerHeld = false
     this.plungerCharge = 0
     this.drainResetPending = false
+    this.clearBallSaver()
+    this.ballSaverArmed = false
     this.lastBallMotionAt = this.time.now
     this.setBallState(this.isBallInPlungerLane() ? 'PLUNGER' : 'IN PLAY')
   }
@@ -619,12 +642,12 @@ export class PinballScene extends Phaser.Scene {
       case 'leftUpper':
         return {
           position: this.shotTestPosition('leftFlipper'),
-          velocity: { x: 15, y: -34 },
+          velocity: { x: 12, y: -35 },
         }
       case 'rightUpper':
         return {
           position: this.shotTestPosition('rightFlipper'),
-          velocity: { x: -15, y: -34 },
+          velocity: { x: -12, y: -35 },
         }
       case 'centerJackpot':
         return {
@@ -696,6 +719,7 @@ export class PinballScene extends Phaser.Scene {
       this.ball.setPosition(tableLayout.plunger.x, this.ball.y)
       this.ball.setVelocity(0, -launchVelocity)
       this.ball.setAngularVelocity(0)
+      this.ballSaverArmed = true
     }
     this.plungerCharge = 0
   }
@@ -743,6 +767,8 @@ export class PinballScene extends Phaser.Scene {
     this.plungerCharge = 0
     this.plungerHeld = false
     this.drainResetPending = false
+    this.clearBallSaver()
+    this.ballSaverArmed = true
     this.lastBallMotionAt = this.time.now
     this.setBallState('PLUNGER')
   }
@@ -851,6 +877,34 @@ export class PinballScene extends Phaser.Scene {
     this.ball.setPosition(tableLayout.tuning.shooterExitRepositionX, tableLayout.tuning.shooterExitRepositionY)
     this.ball.setVelocity(tableLayout.tuning.shooterExitVelocityX, tableLayout.tuning.shooterExitVelocityY)
     this.ball.setAngularVelocity(0)
+    if (this.ballSaverArmed) {
+      this.ballSaverArmed = false
+      this.activateBallSaver()
+    }
+  }
+
+  private activateBallSaver() {
+    this.ballSaveUntil = this.time.now + tableLayout.tuning.ballSaveDurationMs
+    this.updateBallSaverUi()
+  }
+
+  private clearBallSaver() {
+    this.ballSaveUntil = 0
+    this.updateBallSaverUi()
+  }
+
+  private isBallSaverActive() {
+    return this.ballSaveUntil > this.time.now
+  }
+
+  private updateBallSaverUi() {
+    this.ballSaveText?.setVisible(this.isBallSaverActive())
+  }
+
+  private saveDrainedBall() {
+    this.lastScoreEvent = 'BALL SAVE'
+    this.showScorePopup(this.ball.x, this.ball.y - 42, 'BALL SAVE')
+    this.resetBall()
   }
 
   private handleJackpotHit(label: string) {

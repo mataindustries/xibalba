@@ -80,10 +80,10 @@ const shooterExitX = 965
 const shooterExitY = 320
 const shooterExitWidth = 130
 const shooterExitHeight = 260
-const shooterExitVelocityX = -8
-const shooterExitVelocityY = 1
-const shooterExitRepositionX = 800
-const shooterExitRepositionY = 410
+const shooterExitVelocityX = -6.4
+const shooterExitVelocityY = 3.2
+const shooterExitRepositionX = 820
+const shooterExitRepositionY = 455
 const shooterExitFallbackY = 470
 
 export const tableLayout = {
@@ -114,8 +114,8 @@ export const tableLayout = {
     // TUNING: slingForceScale controls slingshot kick strength.
     slingForceScale: 0.064,
     // TUNING: flipper angles/speeds/impulse control shot power, timing, and return feel.
-    flipperRestAngle: { left: -18, right: 198 },
-    flipperActiveAngle: { left: -80, right: 260 },
+    flipperRestAngle: { left: -20, right: 200 },
+    flipperActiveAngle: { left: -83, right: 263 },
     flipperSpeed: 0.64,
     flipperReturnSpeed: 0.36,
     flipperImpulse: 20.4,
@@ -138,6 +138,7 @@ export const tableLayout = {
     shooterExitRepositionX,
     shooterExitRepositionY,
     shooterExitFallbackY,
+    ballSaveDurationMs: 8000,
     // TUNING: anti-stuck values should stay gentle; trap kickers only fire on very slow balls.
     stuckVelocityThreshold: 0.45,
     stuckDurationMs: 1800,
@@ -191,15 +192,15 @@ export const tableLayout = {
     { id: 'top-left-arch', kind: 'orbit', from: { x: 137, y: 284 }, to: { x: 335, y: 96 }, thickness: 30 },
     { id: 'top-center-arch', kind: 'wall', from: { x: 335, y: 96 }, to: { x: 743, y: 96 }, thickness: 30 },
     { id: 'top-right-arch', kind: 'orbit', from: { x: 743, y: 96 }, to: { x: 938, y: 286 }, thickness: 30 },
-    { id: 'left-orbit-inner', kind: 'orbit', from: { x: 204, y: 306 }, to: { x: 174, y: 805 }, thickness: 20 },
-    { id: 'right-orbit-inner', kind: 'orbit', from: { x: 848, y: 610 }, to: { x: 846, y: 805 }, thickness: 20 },
+    { id: 'left-orbit-inner', kind: 'orbit', from: { x: 250, y: 325 }, to: { x: 232, y: 575 }, thickness: 16 },
+    { id: 'right-orbit-inner', kind: 'orbit', from: { x: 888, y: 520 }, to: { x: 864, y: 670 }, thickness: 16 },
 
     // RAMP MOUTHS: simple open guides that feed the ball back toward the middle.
-    { id: 'left-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 242, y: 846 }, to: { x: 406, y: 756 }, thickness: 22 },
-    { id: 'left-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 316, y: 956 }, to: { x: 456, y: 828 }, thickness: 14 },
-    { id: 'right-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 660, y: 775 }, to: { x: 786, y: 850 }, thickness: 18 },
-    { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 624, y: 852 }, to: { x: 714, y: 954 }, thickness: 14 },
-    { id: 'rightTrapFixGuide', kind: 'orbit', from: { x: 885, y: 415 }, to: { x: 742, y: 548 }, thickness: 18 },
+    { id: 'left-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 226, y: 872 }, to: { x: 320, y: 820 }, thickness: 16 },
+    { id: 'left-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 286, y: 972 }, to: { x: 360, y: 918 }, thickness: 12 },
+    { id: 'right-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 760, y: 820 }, to: { x: 854, y: 872 }, thickness: 16 },
+    { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 720, y: 918 }, to: { x: 794, y: 972 }, thickness: 12 },
+    { id: 'rightTrapFixGuide', kind: 'orbit', from: { x: 945, y: 350 }, to: { x: 890, y: 410 }, thickness: 12 },
 
     // LOWER PLAYFIELD: inlanes feed flippers; outlanes and the widened middle gap drain cleanly.
     { id: 'left-outlane-outer', kind: 'outlane', from: { x: 108, y: 1288 }, to: { x: 145, y: 1800 }, thickness: 20 },
@@ -279,13 +280,22 @@ export const tableLayout = {
       velocity: { x: -5.5, y: 5.2 },
       reposition: { x: 770, y: 650 },
     },
+    {
+      id: 'upperLeftOrbitGap',
+      x: 174,
+      y: 478,
+      width: 118,
+      height: 290,
+      velocity: { x: 4.8, y: 3.4 },
+      reposition: { x: 236, y: 560 },
+    },
   ] satisfies TrapKickerZone[],
 
   // BUMPER NEST: three simple circular bumpers around the upper-middle blockout.
   bumpers: [
-    { id: 'quetzal', x: 448, y: 500, radius: 43, score: 1000 },
-    { id: 'jaguar', x: 632, y: 500, radius: 43, score: 1000 },
-    { id: 'sun', x: 540, y: 646, radius: 43, score: 1000 },
+    { id: 'quetzal', x: 392, y: 560, radius: 40, score: 1000 },
+    { id: 'jaguar', x: 688, y: 560, radius: 40, score: 1000 },
+    { id: 'sun', x: 615, y: 425, radius: 40, score: 1000 },
   ] satisfies BumperBody[],
 
   slingshots: [
