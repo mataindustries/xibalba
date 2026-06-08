@@ -76,6 +76,11 @@ export type FlipperConfig = {
   width: number
 }
 
+export type BallLaunch = {
+  position: Point
+  velocity: Point
+}
+
 const shooterExitX = 965
 const shooterExitY = 320
 const shooterExitWidth = 130
@@ -154,6 +159,10 @@ export const tableLayout = {
     jackpotScore: 10000,
     rolloverScore: 1000,
     eclipseBonusScore: 15000,
+    eclipseMultiballStartScore: 25000,
+    eclipseMultiballJackpotScore: 15000,
+    eclipseMultiballBallSaveDurationMs: 10000,
+    eclipseMultiballExtraBalls: 2,
     comboWindowMs: 3400,
     comboLaneCooldownMs: 520,
     comboX2Score: 2000,
@@ -171,6 +180,14 @@ export const tableLayout = {
     radius: 18,
     spawn: { x: 1000, y: 1728 },
     resetVelocity: { x: 0, y: 0 },
+  },
+
+  multiball: {
+    launches: [
+      { position: { x: 540, y: 1040 }, velocity: { x: -4.2, y: -12.5 } },
+      { position: { x: 500, y: 1130 }, velocity: { x: -5.8, y: -9.4 } },
+      { position: { x: 580, y: 1130 }, velocity: { x: 5.8, y: -9.4 } },
+    ] satisfies BallLaunch[],
   },
 
   // PLUNGER LANE: move x/restY/rails together if the launch lane drifts from the blockout.
