@@ -184,9 +184,9 @@ export const tableLayout = {
 
   multiball: {
     launches: [
-      { position: { x: 540, y: 1040 }, velocity: { x: -4.2, y: -12.5 } },
-      { position: { x: 500, y: 1130 }, velocity: { x: -5.8, y: -9.4 } },
-      { position: { x: 580, y: 1130 }, velocity: { x: 5.8, y: -9.4 } },
+      { position: { x: 540, y: 1080 }, velocity: { x: 0, y: -10 } },
+      { position: { x: 430, y: 1180 }, velocity: { x: -2, y: -8 } },
+      { position: { x: 650, y: 1180 }, velocity: { x: 2, y: -8 } },
     ] satisfies BallLaunch[],
   },
 
