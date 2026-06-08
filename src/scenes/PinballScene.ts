@@ -35,7 +35,10 @@ type ControlKeys = {
   rightAlt: Phaser.Input.Keyboard.Key
   plunger: Phaser.Input.Keyboard.Key
   plungerAlt: Phaser.Input.Keyboard.Key
+  pause: Phaser.Input.Keyboard.Key
   reset: Phaser.Input.Keyboard.Key
+  devMode: Phaser.Input.Keyboard.Key
+  devModeAlt: Phaser.Input.Keyboard.Key
   debug: Phaser.Input.Keyboard.Key
   testMode: Phaser.Input.Keyboard.Key
   clearVelocity: Phaser.Input.Keyboard.Key
@@ -61,6 +64,8 @@ type ScorePopupOptions = {
   color?: string
 }
 
+const HIGH_SCORE_KEY = 'xibalba-pinball-high-score'
+
 export class PinballScene extends Phaser.Scene {
   private balls: BallRuntime[] = []
   private nextBallId = 1
@@ -70,11 +75,19 @@ export class PinballScene extends Phaser.Scene {
   private playfieldGraphics!: Phaser.GameObjects.Graphics
   private plungerVisual!: Phaser.GameObjects.Rectangle
   private scoreText!: Phaser.GameObjects.Text
+  private highScoreText!: Phaser.GameObjects.Text
   private ballStateText!: Phaser.GameObjects.Text
   private ballSaveText!: Phaser.GameObjects.Text
   private eclipseStateText!: Phaser.GameObjects.Text
   private rolloverText!: Phaser.GameObjects.Text
+  private controlsText!: Phaser.GameObjects.Text
+  private devModeText!: Phaser.GameObjects.Text
   private shotTestText!: Phaser.GameObjects.Text
+  private startOverlay!: Phaser.GameObjects.Container
+  private pauseOverlay!: Phaser.GameObjects.Container
+  private touchHintLeft!: Phaser.GameObjects.Text
+  private touchHintRight!: Phaser.GameObjects.Text
+  private touchHintLaunch!: Phaser.GameObjects.Text
   private keys?: ControlKeys
   private bumperVisuals = new Map<string, Phaser.GameObjects.Arc>()
   private slingVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
@@ -95,11 +108,15 @@ export class PinballScene extends Phaser.Scene {
   private comboStep = 0
   private lastComboAt = 0
   private lastLaneComboAt = 0
+  private hasStarted = false
+  private gamePaused = false
+  private devModeEnabled = false
   private debugEnabled = false
   private shotTestMode = false
   private eclipseState: EclipseState = 'NORMAL'
   private lastSensorHit = 'none'
   private lastScoreEvent = 'none'
+  private highScore = 0
   private audioContext?: AudioContext
   private lastTrailAt = 0
 
@@ -136,14 +153,25 @@ export class PinballScene extends Phaser.Scene {
 
     this.spawnBall(tableLayout.ball.spawn, tableLayout.ball.resetVelocity)
     this.createPlungerVisual()
+    this.highScore = this.loadHighScore()
     this.createHud()
+    this.createTouchHints()
+    this.createStartOverlay()
+    this.createPauseOverlay()
     this.bindInput()
     this.bindCollisions()
     this.drawPlaceholderPlayfield()
+    this.setGameplayFrozen(true)
   }
 
   update(_time: number, delta: number) {
     this.updateKeyboardState()
+    this.updateHud()
+
+    if (!this.hasStarted || this.gamePaused) {
+      return
+    }
+
     this.updateFlippers(delta)
     this.updatePlunger()
     this.maybeAssistShooterExit()
@@ -342,39 +370,50 @@ export class PinballScene extends Phaser.Scene {
     this.scoreText = this.add
       .text(24, 22, 'SCORE 0', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '28px',
+        fontSize: '26px',
         color: '#dffcff',
         stroke: '#071018',
         strokeThickness: 5,
       })
       .setDepth(40)
 
-    this.add
-      .text(24, 59, 'LEFT/A + RIGHT/D flippers   SPACE/DOWN launch   R reset   B debug   M multiball', {
+    this.highScoreText = this.add
+      .text(tableLayout.table.width - 24, 22, `HIGH ${this.highScore}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '15px',
+        fontSize: '22px',
+        color: '#fff4b0',
+        stroke: '#071018',
+        strokeThickness: 5,
+      })
+      .setOrigin(1, 0)
+      .setDepth(40)
+
+    this.controlsText = this.add
+      .text(24, 60, 'A/LEFT + D/RIGHT FLIPPERS   SPACE/DOWN LAUNCH   P PAUSE   R RESTART', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '13px',
         color: '#8af8ff',
         stroke: '#071018',
         strokeThickness: 3,
       })
       .setDepth(40)
-      .setAlpha(0.86)
+      .setAlpha(0.82)
 
     this.ballStateText = this.add
-      .text(24, 86, 'STATE PLUNGER', {
+      .text(24, 82, 'BALL PLUNGER', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '15px',
+        fontSize: '13px',
         color: '#ffd166',
         stroke: '#071018',
         strokeThickness: 3,
       })
       .setDepth(40)
-      .setAlpha(0.9)
+      .setAlpha(0.88)
 
     this.ballSaveText = this.add
-      .text(tableLayout.table.width - 24, 22, 'BALL SAVE', {
+      .text(tableLayout.table.width - 24, 54, 'BALL SAVE', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '26px',
+        fontSize: '20px',
         color: '#fff4b0',
         stroke: '#071018',
         strokeThickness: 5,
@@ -384,9 +423,9 @@ export class PinballScene extends Phaser.Scene {
       .setVisible(false)
 
     this.rolloverText = this.add
-      .text(24, 113, `ROLLOVERS 0/${this.rolloverCount()}`, {
+      .text(24, 104, `ROLLOVERS 0/${this.rolloverCount()}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '15px',
+        fontSize: '13px',
         color: '#9dffb8',
         stroke: '#071018',
         strokeThickness: 3,
@@ -395,18 +434,31 @@ export class PinballScene extends Phaser.Scene {
       .setAlpha(0.9)
 
     this.eclipseStateText = this.add
-      .text(24, 140, 'MODE NORMAL', {
+      .text(tableLayout.table.width - 24, 82, 'STATE NORMAL', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '15px',
         color: '#f4fbff',
         stroke: '#071018',
         strokeThickness: 3,
       })
+      .setOrigin(1, 0)
       .setDepth(40)
       .setAlpha(0.92)
 
+    this.devModeText = this.add
+      .text(tableLayout.table.width - 24, 108, 'DEV MODE', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '13px',
+        color: '#ff8bd8',
+        stroke: '#071018',
+        strokeThickness: 3,
+      })
+      .setOrigin(1, 0)
+      .setDepth(46)
+      .setVisible(false)
+
     this.shotTestText = this.add
-      .text(24, 174, '', {
+      .text(24, 134, '', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '14px',
         color: '#f4fbff',
@@ -418,6 +470,141 @@ export class PinballScene extends Phaser.Scene {
       .setVisible(false)
   }
 
+  private createTouchHints() {
+    const hintStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+      fontSize: '18px',
+      color: '#dffcff',
+      stroke: '#071018',
+      strokeThickness: 4,
+    }
+
+    this.touchHintLeft = this.add
+      .text(62, tableLayout.table.height - 152, 'LEFT FLIP', hintStyle)
+      .setDepth(38)
+      .setAlpha(0.28)
+
+    this.touchHintRight = this.add
+      .text(tableLayout.table.width - 62, tableLayout.table.height - 152, 'RIGHT FLIP', hintStyle)
+      .setOrigin(1, 0)
+      .setDepth(38)
+      .setAlpha(0.28)
+
+    this.touchHintLaunch = this.add
+      .text(tableLayout.table.width - 62, tableLayout.table.height - 300, 'LAUNCH', hintStyle)
+      .setOrigin(1, 0)
+      .setDepth(38)
+      .setAlpha(0.32)
+  }
+
+  private createStartOverlay() {
+    const panel = this.add
+      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, 0x050810, 0.82)
+      .setDepth(90)
+
+    const title = this.add
+      .text(tableLayout.table.width / 2, 560, 'XIBALBA PINBALL', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '72px',
+        color: '#dffcff',
+        stroke: '#071018',
+        strokeThickness: 8,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(91)
+
+    const subtitle = this.add
+      .text(tableLayout.table.width / 2, 642, 'Neon Aztec Temple', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '28px',
+        color: '#ffd166',
+        stroke: '#071018',
+        strokeThickness: 5,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(91)
+
+    const high = this.add
+      .text(tableLayout.table.width / 2, 735, `HIGH SCORE ${this.highScore}`, {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '24px',
+        color: '#9dffb8',
+        stroke: '#071018',
+        strokeThickness: 4,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setName('startHighScore')
+      .setDepth(91)
+
+    const prompt = this.add
+      .text(tableLayout.table.width / 2, 870, 'Tap / Press Space to Start', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '34px',
+        color: '#f4fbff',
+        stroke: '#071018',
+        strokeThickness: 6,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(91)
+
+    const controls = this.add
+      .text(
+        tableLayout.table.width / 2,
+        1010,
+        ['A / Left  left flipper', 'D / Right  right flipper', 'Space / Down  launch', 'P pause   R restart'].join('\n'),
+        {
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+          fontSize: '22px',
+          color: '#8af8ff',
+          stroke: '#071018',
+          strokeThickness: 4,
+          align: 'center',
+          lineSpacing: 12,
+        },
+      )
+      .setOrigin(0.5)
+      .setDepth(91)
+
+    const dev = this.add
+      .text(tableLayout.table.width / 2, 1248, '` or F1 toggles dev tools', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '18px',
+        color: '#b5c7cf',
+        stroke: '#071018',
+        strokeThickness: 3,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(91)
+
+    this.startOverlay = this.add.container(0, 0, [panel, title, subtitle, high, prompt, controls, dev]).setDepth(90)
+  }
+
+  private createPauseOverlay() {
+    const scrim = this.add
+      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, 0x050810, 0.48)
+      .setDepth(80)
+
+    const label = this.add
+      .text(tableLayout.table.width / 2, tableLayout.table.height / 2, 'PAUSED\nP to resume', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '44px',
+        color: '#f4fbff',
+        stroke: '#071018',
+        strokeThickness: 7,
+        align: 'center',
+        lineSpacing: 16,
+      })
+      .setOrigin(0.5)
+      .setDepth(81)
+
+    this.pauseOverlay = this.add.container(0, 0, [scrim, label]).setDepth(80).setVisible(false)
+  }
+
   private bindInput() {
     if (this.input.keyboard) {
       this.keys = {
@@ -427,7 +614,10 @@ export class PinballScene extends Phaser.Scene {
         rightAlt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
         plunger: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         plungerAlt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
+        pause: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P),
         reset: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R),
+        devMode: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.BACKTICK),
+        devModeAlt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F1),
         debug: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B),
         testMode: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T),
         clearVelocity: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C),
@@ -654,10 +844,39 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
+    if (Phaser.Input.Keyboard.JustDown(this.keys.devMode) || Phaser.Input.Keyboard.JustDown(this.keys.devModeAlt)) {
+      this.setDevMode(!this.devModeEnabled)
+    }
+
+    const keyboardPlunger = this.keys.plunger.isDown || this.keys.plungerAlt.isDown
+
+    if (!this.hasStarted) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.plunger) || Phaser.Input.Keyboard.JustDown(this.keys.plungerAlt)) {
+        this.startGame()
+      }
+      this.lastKeyboardPlunger = keyboardPlunger
+      return
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.pause)) {
+      this.setPaused(!this.gamePaused)
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.reset)) {
+      this.resetGameState()
+    }
+
+    if (this.gamePaused) {
+      this.setFlipperPressed('left', false)
+      this.setFlipperPressed('right', false)
+      this.plungerHeld = false
+      this.lastKeyboardPlunger = keyboardPlunger
+      return
+    }
+
     this.setFlipperPressed('left', this.keys.left.isDown || this.keys.leftAlt.isDown)
     this.setFlipperPressed('right', this.keys.right.isDown || this.keys.rightAlt.isDown)
 
-    const keyboardPlunger = this.keys.plunger.isDown || this.keys.plungerAlt.isDown
     if (keyboardPlunger && !this.lastKeyboardPlunger) {
       this.plungerHeld = Boolean(this.plungerBall())
     }
@@ -666,11 +885,7 @@ export class PinballScene extends Phaser.Scene {
     }
     this.lastKeyboardPlunger = keyboardPlunger
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.reset)) {
-      this.resetBall()
-    }
-
-    if (Phaser.Input.Keyboard.JustDown(this.keys.debug)) {
+    if (this.devModeEnabled && Phaser.Input.Keyboard.JustDown(this.keys.debug)) {
       this.debugEnabled = !this.debugEnabled
       this.debugGraphics.setVisible(this.debugEnabled)
       if (!this.debugEnabled) {
@@ -678,25 +893,102 @@ export class PinballScene extends Phaser.Scene {
       }
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.testMode)) {
+    if (this.devModeEnabled && Phaser.Input.Keyboard.JustDown(this.keys.testMode)) {
       this.setShotTestMode(!this.shotTestMode)
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.multiball)) {
+    if (this.devModeEnabled && Phaser.Input.Keyboard.JustDown(this.keys.multiball)) {
       this.startEclipseMultiball()
     }
 
-    if (this.shotTestMode) {
+    if (this.devModeEnabled && this.shotTestMode) {
       this.handleShotTestInput()
     }
   }
 
   private setShotTestMode(enabled: boolean) {
-    this.shotTestMode = enabled
-    this.shotTestText.setVisible(enabled)
-    if (!enabled) {
+    this.shotTestMode = enabled && this.devModeEnabled
+    this.shotTestText.setVisible(this.shotTestMode)
+    if (!this.shotTestMode) {
       this.shotTestText.setText('')
     }
+  }
+
+  private startGame() {
+    if (this.hasStarted) {
+      return
+    }
+
+    this.hasStarted = true
+    this.startOverlay.setVisible(false)
+    this.setGameplayFrozen(false)
+    this.unlockAudio()
+  }
+
+  private setPaused(paused: boolean) {
+    if (!this.hasStarted) {
+      return
+    }
+
+    this.gamePaused = paused
+    this.pauseOverlay.setVisible(paused)
+    this.setGameplayFrozen(paused)
+    if (paused) {
+      this.setFlipperPressed('left', false)
+      this.setFlipperPressed('right', false)
+      this.plungerHeld = false
+    }
+  }
+
+  private setGameplayFrozen(frozen: boolean) {
+    if (frozen) {
+      this.matter.world.pause()
+    } else {
+      this.matter.world.resume()
+    }
+  }
+
+  private setDevMode(enabled: boolean) {
+    this.devModeEnabled = enabled
+    this.devModeText.setVisible(enabled)
+    if (!enabled) {
+      this.debugEnabled = false
+      this.debugGraphics.setVisible(false)
+      this.debugGraphics.clear()
+      this.setShotTestMode(false)
+    }
+  }
+
+  private resetGameState() {
+    this.score = 0
+    this.lastScoreEvent = 'none'
+    this.updateHud()
+    this.resetBall()
+    if (this.gamePaused) {
+      this.setPaused(false)
+    }
+  }
+
+  private updateHud() {
+    this.scoreText?.setText(`SCORE ${this.score}`)
+    this.highScoreText?.setText(`HIGH ${this.highScore}`)
+    this.ballStateText?.setText(`BALL ${this.ballState}`)
+    this.rolloverText?.setText(`ROLLOVERS ${this.litRollovers.size}/${this.rolloverCount()}`)
+    this.eclipseStateText?.setText(`STATE ${this.currentModeState()}`)
+    this.ballSaveText?.setVisible(this.isBallSaverActive())
+    this.devModeText?.setVisible(this.devModeEnabled)
+    this.controlsText?.setVisible(this.hasStarted)
+    this.touchHintLeft?.setVisible(this.hasStarted && !this.gamePaused)
+    this.touchHintRight?.setVisible(this.hasStarted && !this.gamePaused)
+    this.touchHintLaunch?.setVisible(this.hasStarted && !this.gamePaused)
+  }
+
+  private currentModeState() {
+    if (this.isBallSaverActive() && this.eclipseState !== 'ECLIPSE MULTIBALL') {
+      return 'BALL SAVE'
+    }
+
+    return this.eclipseState
   }
 
   private handleShotTestInput() {
@@ -883,6 +1175,15 @@ export class PinballScene extends Phaser.Scene {
 
   private handlePointerDown(pointer: Phaser.Input.Pointer) {
     this.unlockAudio()
+    if (!this.hasStarted) {
+      this.startGame()
+      return
+    }
+
+    if (this.gamePaused) {
+      return
+    }
+
     const worldPoint = this.screenToTablePoint(pointer)
     let control: 'left' | 'right' | 'plunger'
 
@@ -919,6 +1220,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private resetBall() {
+    this.pointerControls.clear()
     this.clearAllBalls()
     this.spawnBall(tableLayout.ball.spawn, tableLayout.ball.resetVelocity)
     this.plungerCharge = 0
@@ -1004,7 +1306,7 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.ballState = state
-    this.ballStateText?.setText(`STATE ${state}`)
+    this.ballStateText?.setText(`BALL ${state}`)
   }
 
   private updateAntiStuck() {
@@ -1257,7 +1559,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private updateRolloverUi() {
-    this.rolloverText?.setText(`ROLLOVERS ${this.litRollovers.size}/${this.rolloverCount()}`)
+    this.updateHud()
   }
 
   private setRolloverVisualLit(id: string, lit: boolean) {
@@ -1283,7 +1585,7 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.eclipseState = state
-    this.eclipseStateText?.setText(`MODE ${state}`)
+    this.updateHud()
   }
 
   private startEclipseMultiball(sourceBall = this.primaryBall()) {
@@ -1385,7 +1687,34 @@ export class PinballScene extends Phaser.Scene {
 
   private addScore(points: number) {
     this.score += points
-    this.scoreText.setText(`SCORE ${this.score}`)
+    if (this.score > this.highScore) {
+      this.highScore = this.score
+      this.saveHighScore()
+      this.updateStartHighScore()
+    }
+    this.updateHud()
+  }
+
+  private loadHighScore() {
+    if (typeof window === 'undefined') {
+      return 0
+    }
+
+    const stored = Number.parseInt(window.localStorage.getItem(HIGH_SCORE_KEY) ?? '0', 10)
+    return Number.isFinite(stored) && stored > 0 ? stored : 0
+  }
+
+  private saveHighScore() {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(HIGH_SCORE_KEY, String(this.highScore))
+  }
+
+  private updateStartHighScore() {
+    const highScoreText = this.startOverlay?.getByName('startHighScore') as Phaser.GameObjects.Text | null
+    highScoreText?.setText(`HIGH SCORE ${this.highScore}`)
   }
 
   private showScorePopup(x: number, y: number, label: string, points?: number, options: ScorePopupOptions = {}) {
