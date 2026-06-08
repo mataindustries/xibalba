@@ -65,6 +65,32 @@ type ScorePopupOptions = {
 }
 
 const HIGH_SCORE_KEY = 'xibalba-pinball-high-score'
+const theme = {
+  obsidian: 0x0b0b0f,
+  charcoal: 0x1a1a1f,
+  agedGold: 0xc89b3c,
+  goldShadow: 0x7a5a1e,
+  bone: 0xe8dfc8,
+  jade: 0x1fa36b,
+  brightJade: 0x5be39d,
+  ember: 0xb63a2b,
+  eclipseRed: 0x7e1f1f,
+  ivory: 0xf7f1df,
+  ink: 0x050507,
+  css: {
+    obsidian: '#0B0B0F',
+    charcoal: '#1A1A1F',
+    agedGold: '#C89B3C',
+    goldShadow: '#7A5A1E',
+    bone: '#E8DFC8',
+    jade: '#1FA36B',
+    brightJade: '#5BE39D',
+    ember: '#B63A2B',
+    eclipseRed: '#7E1F1F',
+    ivory: '#F7F1DF',
+    ink: '#050507',
+  },
+} as const
 
 export class PinballScene extends Phaser.Scene {
   private balls: BallRuntime[] = []
@@ -130,13 +156,14 @@ export class PinballScene extends Phaser.Scene {
 
   create() {
     this.matter.world.setBounds(0, 0, tableLayout.table.width, tableLayout.table.height, 40, true, true, false, false)
-    this.cameras.main.setBackgroundColor('#050810')
+    this.cameras.main.setBackgroundColor(theme.css.obsidian)
 
     this.add
       .image(0, 0, 'blockout')
       .setOrigin(0)
       .setDisplaySize(tableLayout.table.width, tableLayout.table.height)
-      .setAlpha(tableLayout.table.backgroundAlpha)
+      .setTint(theme.charcoal)
+      .setAlpha(tableLayout.table.backgroundAlpha * 0.42)
       .setDepth(0)
 
     this.createBallTexture()
@@ -239,17 +266,27 @@ export class PinballScene extends Phaser.Scene {
 
   private createJackpotVisual(sensor: SensorBody) {
     // TUNING: this low-alpha gate marks the jackpot sensor without changing collision geometry.
+    this.add
+      .ellipse(sensor.x, sensor.y, sensor.width * 1.65, sensor.height * 1.85, theme.eclipseRed, 0.13)
+      .setStrokeStyle(6, theme.goldShadow, 0.46)
+      .setDepth(2.7)
+
+    this.add
+      .ellipse(sensor.x, sensor.y, sensor.width * 1.28, sensor.height * 1.34, theme.agedGold, 0.1)
+      .setStrokeStyle(3, theme.agedGold, 0.68)
+      .setDepth(2.8)
+
     this.jackpotVisual = this.add
-      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, 0xffd166, 0.12)
-      .setStrokeStyle(4, 0xfff4b0, 0.48)
+      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.eclipseRed, 0.2)
+      .setStrokeStyle(4, theme.agedGold, 0.74)
       .setDepth(3)
     this.jackpotVisual.rotation = sensor.angle ?? 0
   }
 
   private createRolloverVisual(sensor: SensorBody) {
     const visual = this.add
-      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, 0x1aa58d, 0.2)
-      .setStrokeStyle(3, 0x58fff8, 0.48)
+      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.charcoal, 0.62)
+      .setStrokeStyle(3, theme.goldShadow, 0.68)
       .setDepth(3)
     visual.rotation = sensor.angle ?? 0
     this.rolloverVisuals.set(sensor.id, visual)
@@ -274,7 +311,13 @@ export class PinballScene extends Phaser.Scene {
       restitution: tableLayout.tuning.bumperBounce,
     })
 
-    const visual = this.add.circle(bumper.x, bumper.y, bumper.radius, 0xff3bc7, 0.34).setStrokeStyle(5, 0x58fff8, 0.9).setDepth(4)
+    this.add.circle(bumper.x, bumper.y, bumper.radius * 1.5, theme.agedGold, 0.1).setDepth(3.7)
+    this.add.circle(bumper.x, bumper.y, bumper.radius * 1.18, theme.goldShadow, 0.72).setStrokeStyle(4, theme.agedGold, 0.88).setDepth(3.9)
+    const visual = this.add
+      .circle(bumper.x, bumper.y, bumper.radius * 0.68, theme.jade, 0.58)
+      .setStrokeStyle(4, theme.brightJade, 0.84)
+      .setDepth(4)
+    this.add.circle(bumper.x, bumper.y, bumper.radius * 0.28, theme.brightJade, 0.34).setDepth(4.1)
     this.bumperVisuals.set(bumper.id, visual)
     this.collisionBodies.push(body)
     return body
@@ -290,7 +333,10 @@ export class PinballScene extends Phaser.Scene {
     })
 
     this.matter.body.setAngle(body, angle)
-    const visual = this.add.rectangle(x, y, length, sling.thickness, 0xffd166, 0.24).setDepth(5)
+    const visual = this.add
+      .rectangle(x, y, length, sling.thickness, theme.goldShadow, 0.68)
+      .setStrokeStyle(3, theme.agedGold, 0.72)
+      .setDepth(5)
     visual.rotation = angle
     this.slingVisuals.set(sling.id, visual)
     this.collisionBodies.push(body)
@@ -311,8 +357,8 @@ export class PinballScene extends Phaser.Scene {
     this.matter.body.setAngle(body, angle)
 
     const visual = this.add
-      .rectangle(center.x, center.y, config.length, config.width, config.id === 'left' ? 0x54d7ff : 0xff5bd5, 0.9)
-      .setStrokeStyle(3, 0xffffff, 0.75)
+      .rectangle(center.x, center.y, config.length, config.width, theme.agedGold, 0.92)
+      .setStrokeStyle(3, theme.ivory, 0.58)
       .setDepth(7)
     visual.rotation = angle
 
@@ -350,9 +396,11 @@ export class PinballScene extends Phaser.Scene {
 
     const radius = tableLayout.ball.radius
     const graphics = this.make.graphics({ x: 0, y: 0 }, false)
-    graphics.fillStyle(0xeaffff, 1)
+    graphics.fillStyle(theme.ivory, 1)
     graphics.fillCircle(radius, radius, radius)
-    graphics.lineStyle(4, 0x51f2ff, 1)
+    graphics.fillStyle(0xffffff, 0.42)
+    graphics.fillCircle(radius - 5, radius - 6, radius * 0.38)
+    graphics.lineStyle(4, theme.agedGold, 1)
     graphics.strokeCircle(radius, radius, radius - 2)
     graphics.generateTexture('ball', radius * 2, radius * 2)
     graphics.destroy()
@@ -361,8 +409,8 @@ export class PinballScene extends Phaser.Scene {
   private createPlungerVisual() {
     const plunger = tableLayout.plunger
     this.plungerVisual = this.add
-      .rectangle(plunger.x, plunger.restY, plunger.width, plunger.height, 0xffc857, 0.88)
-      .setStrokeStyle(3, 0xfff4b0, 0.9)
+      .rectangle(plunger.x, plunger.restY, plunger.width, plunger.height, theme.agedGold, 0.9)
+      .setStrokeStyle(3, theme.ivory, 0.72)
       .setDepth(6)
   }
 
@@ -371,8 +419,8 @@ export class PinballScene extends Phaser.Scene {
       .text(24, 22, 'SCORE 0', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '26px',
-        color: '#dffcff',
-        stroke: '#071018',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
         strokeThickness: 5,
       })
       .setDepth(40)
@@ -381,8 +429,8 @@ export class PinballScene extends Phaser.Scene {
       .text(tableLayout.table.width - 24, 22, `HIGH ${this.highScore}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '22px',
-        color: '#fff4b0',
-        stroke: '#071018',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
         strokeThickness: 5,
       })
       .setOrigin(1, 0)
@@ -392,19 +440,19 @@ export class PinballScene extends Phaser.Scene {
       .text(24, 60, 'A/LEFT + D/RIGHT FLIPPERS   SPACE/DOWN LAUNCH   P PAUSE   R RESTART', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
-        color: '#8af8ff',
-        stroke: '#071018',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
         strokeThickness: 3,
       })
       .setDepth(40)
-      .setAlpha(0.82)
+      .setAlpha(0.72)
 
     this.ballStateText = this.add
       .text(24, 82, 'BALL PLUNGER', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
-        color: '#ffd166',
-        stroke: '#071018',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
         strokeThickness: 3,
       })
       .setDepth(40)
@@ -414,8 +462,8 @@ export class PinballScene extends Phaser.Scene {
       .text(tableLayout.table.width - 24, 54, 'BALL SAVE', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '20px',
-        color: '#fff4b0',
-        stroke: '#071018',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
         strokeThickness: 5,
       })
       .setOrigin(1, 0)
@@ -426,8 +474,8 @@ export class PinballScene extends Phaser.Scene {
       .text(24, 104, `ROLLOVERS 0/${this.rolloverCount()}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
-        color: '#9dffb8',
-        stroke: '#071018',
+        color: theme.css.brightJade,
+        stroke: theme.css.ink,
         strokeThickness: 3,
       })
       .setDepth(40)
@@ -437,8 +485,8 @@ export class PinballScene extends Phaser.Scene {
       .text(tableLayout.table.width - 24, 82, 'STATE NORMAL', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '15px',
-        color: '#f4fbff',
-        stroke: '#071018',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
         strokeThickness: 3,
       })
       .setOrigin(1, 0)
@@ -449,8 +497,8 @@ export class PinballScene extends Phaser.Scene {
       .text(tableLayout.table.width - 24, 108, 'DEV MODE', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
-        color: '#ff8bd8',
-        stroke: '#071018',
+        color: theme.css.ember,
+        stroke: theme.css.ink,
         strokeThickness: 3,
       })
       .setOrigin(1, 0)
@@ -461,8 +509,8 @@ export class PinballScene extends Phaser.Scene {
       .text(24, 134, '', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '14px',
-        color: '#f4fbff',
-        stroke: '#071018',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
         strokeThickness: 4,
         lineSpacing: 4,
       })
@@ -474,40 +522,50 @@ export class PinballScene extends Phaser.Scene {
     const hintStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
       fontSize: '18px',
-      color: '#dffcff',
-      stroke: '#071018',
+      color: theme.css.agedGold,
+      stroke: theme.css.ink,
       strokeThickness: 4,
     }
 
     this.touchHintLeft = this.add
       .text(62, tableLayout.table.height - 152, 'LEFT FLIP', hintStyle)
       .setDepth(38)
-      .setAlpha(0.28)
+      .setAlpha(0.2)
 
     this.touchHintRight = this.add
       .text(tableLayout.table.width - 62, tableLayout.table.height - 152, 'RIGHT FLIP', hintStyle)
       .setOrigin(1, 0)
       .setDepth(38)
-      .setAlpha(0.28)
+      .setAlpha(0.2)
 
     this.touchHintLaunch = this.add
       .text(tableLayout.table.width - 62, tableLayout.table.height - 300, 'LAUNCH', hintStyle)
       .setOrigin(1, 0)
       .setDepth(38)
-      .setAlpha(0.32)
+      .setAlpha(0.24)
   }
 
   private createStartOverlay() {
     const panel = this.add
-      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, 0x050810, 0.82)
+      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, theme.obsidian, 0.9)
       .setDepth(90)
+
+    const halo = this.add
+      .ellipse(tableLayout.table.width / 2, 610, 620, 360, theme.eclipseRed, 0.1)
+      .setStrokeStyle(5, theme.goldShadow, 0.52)
+      .setDepth(90.5)
+
+    const frame = this.add
+      .rectangle(tableLayout.table.width / 2, 610, 720, 310, theme.charcoal, 0.22)
+      .setStrokeStyle(3, theme.agedGold, 0.56)
+      .setDepth(90.6)
 
     const title = this.add
       .text(tableLayout.table.width / 2, 560, 'XIBALBA PINBALL', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '72px',
-        color: '#dffcff',
-        stroke: '#071018',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
         strokeThickness: 8,
         align: 'center',
       })
@@ -515,11 +573,11 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(91)
 
     const subtitle = this.add
-      .text(tableLayout.table.width / 2, 642, 'Neon Aztec Temple', {
+      .text(tableLayout.table.width / 2, 642, 'Obsidian Underworld Temple', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '28px',
-        color: '#ffd166',
-        stroke: '#071018',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
         strokeThickness: 5,
         align: 'center',
       })
@@ -530,8 +588,8 @@ export class PinballScene extends Phaser.Scene {
       .text(tableLayout.table.width / 2, 735, `HIGH SCORE ${this.highScore}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '24px',
-        color: '#9dffb8',
-        stroke: '#071018',
+        color: theme.css.brightJade,
+        stroke: theme.css.ink,
         strokeThickness: 4,
         align: 'center',
       })
@@ -543,8 +601,8 @@ export class PinballScene extends Phaser.Scene {
       .text(tableLayout.table.width / 2, 870, 'Tap / Press Space to Start', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '34px',
-        color: '#f4fbff',
-        stroke: '#071018',
+        color: theme.css.ivory,
+        stroke: theme.css.ink,
         strokeThickness: 6,
         align: 'center',
       })
@@ -559,8 +617,8 @@ export class PinballScene extends Phaser.Scene {
         {
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
           fontSize: '22px',
-          color: '#8af8ff',
-          stroke: '#071018',
+          color: theme.css.bone,
+          stroke: theme.css.ink,
           strokeThickness: 4,
           align: 'center',
           lineSpacing: 12,
@@ -573,28 +631,28 @@ export class PinballScene extends Phaser.Scene {
       .text(tableLayout.table.width / 2, 1248, '` or F1 toggles dev tools', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '18px',
-        color: '#b5c7cf',
-        stroke: '#071018',
+        color: theme.css.goldShadow,
+        stroke: theme.css.ink,
         strokeThickness: 3,
         align: 'center',
       })
       .setOrigin(0.5)
       .setDepth(91)
 
-    this.startOverlay = this.add.container(0, 0, [panel, title, subtitle, high, prompt, controls, dev]).setDepth(90)
+    this.startOverlay = this.add.container(0, 0, [panel, halo, frame, title, subtitle, high, prompt, controls, dev]).setDepth(90)
   }
 
   private createPauseOverlay() {
     const scrim = this.add
-      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, 0x050810, 0.48)
+      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, theme.obsidian, 0.56)
       .setDepth(80)
 
     const label = this.add
       .text(tableLayout.table.width / 2, tableLayout.table.height / 2, 'PAUSED\nP to resume', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '44px',
-        color: '#f4fbff',
-        stroke: '#071018',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
         strokeThickness: 7,
         align: 'center',
         lineSpacing: 16,
@@ -785,7 +843,7 @@ export class PinballScene extends Phaser.Scene {
       this.showScorePopup(otherBody.position.x, otherBody.position.y - 28, 'BUMPER HIT', points)
       if (bumper) {
         this.pulse(this.bumperVisuals.get(bumper.id), tableLayout.tuning.pulseScale + 0.1)
-        this.flashCircle(bumper.x, bumper.y, bumper.radius * 1.45, 0x58fff8)
+        this.flashCircle(bumper.x, bumper.y, bumper.radius * 1.45, theme.brightJade)
       }
       this.kickBallAwayFrom(ball, otherBody.position, tableLayout.tuning.bumperForce)
       this.registerComboHit('bumper', ball)
@@ -976,6 +1034,7 @@ export class PinballScene extends Phaser.Scene {
     this.ballStateText?.setText(`BALL ${this.ballState}`)
     this.rolloverText?.setText(`ROLLOVERS ${this.litRollovers.size}/${this.rolloverCount()}`)
     this.eclipseStateText?.setText(`STATE ${this.currentModeState()}`)
+    this.eclipseStateText?.setColor(this.currentModeColor())
     this.ballSaveText?.setVisible(this.isBallSaverActive())
     this.devModeText?.setVisible(this.devModeEnabled)
     this.controlsText?.setVisible(this.hasStarted)
@@ -990,6 +1049,22 @@ export class PinballScene extends Phaser.Scene {
     }
 
     return this.eclipseState
+  }
+
+  private currentModeColor() {
+    if (this.eclipseState === 'ECLIPSE MULTIBALL') {
+      return theme.css.ember
+    }
+
+    if (this.eclipseState === 'ECLIPSE READY') {
+      return theme.css.brightJade
+    }
+
+    if (this.isBallSaverActive()) {
+      return theme.css.agedGold
+    }
+
+    return theme.css.bone
   }
 
   private handleShotTestInput() {
@@ -1492,7 +1567,7 @@ export class PinballScene extends Phaser.Scene {
     this.playSound('ballSave')
     this.showScorePopup(ball.image.x, ball.image.y - 42, 'BALL SAVE', undefined, {
       event: true,
-      color: '#fff4b0',
+      color: theme.css.agedGold,
     })
 
     if (this.eclipseState === 'ECLIPSE MULTIBALL' || this.balls.length > 1) {
@@ -1524,11 +1599,12 @@ export class PinballScene extends Phaser.Scene {
     this.showScorePopup(ball.image.x, ball.image.y - 54, 'TEMPLE JACKPOT', points, {
       major: true,
       event: true,
-      color: '#fff4b0',
+      color: theme.css.agedGold,
     })
     this.pulse(this.jackpotVisual, tableLayout.tuning.jackpotPulseScale, tableLayout.tuning.majorScorePopupDurationMs * 0.18)
     if (sensor) {
-      this.flashRectangle(sensor.x, sensor.y, sensor.width, sensor.height, 0xfff4b0, tableLayout.juice.jackpotFlashDurationMs)
+      this.flashRectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.agedGold, tableLayout.juice.jackpotFlashDurationMs)
+      this.flashCircle(sensor.x, sensor.y, sensor.width * 0.75, theme.eclipseRed, tableLayout.juice.jackpotFlashDurationMs)
     }
     this.registerComboHit('targetOrLane', ball)
   }
@@ -1546,7 +1622,7 @@ export class PinballScene extends Phaser.Scene {
     this.addScore(points)
     this.showScorePopup(sensor.x, sensor.y - 30, 'ROLLOVER', points)
     this.pulse(this.rolloverVisuals.get(sensor.id), tableLayout.tuning.rolloverPulseScale)
-    this.flashRectangle(sensor.x, sensor.y, sensor.width, sensor.height, 0x9dffb8)
+    this.flashRectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.brightJade)
     this.updateRolloverUi()
 
     if (this.litRollovers.size >= this.rolloverCount()) {
@@ -1561,9 +1637,9 @@ export class PinballScene extends Phaser.Scene {
       this.showScorePopup(tableLayout.table.width / 2, sensor.y - 86, 'ECLIPSE READY', undefined, {
         major: true,
         event: true,
-        color: '#9dffb8',
+        color: theme.css.brightJade,
       })
-      this.flashPlayfield(0x9dffb8)
+      this.flashPlayfield(theme.jade)
       return
     }
 
@@ -1591,8 +1667,8 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
-    visual.setFillStyle(lit ? 0xffd166 : 0x1aa58d, lit ? 0.84 : 0.2)
-    visual.setStrokeStyle(3, lit ? 0xfff4b0 : 0x58fff8, lit ? 0.95 : 0.48)
+    visual.setFillStyle(lit ? theme.jade : theme.charcoal, lit ? 0.72 : 0.62)
+    visual.setStrokeStyle(3, lit ? theme.brightJade : theme.goldShadow, lit ? 0.9 : 0.68)
   }
 
   private resetRollovers() {
@@ -1633,13 +1709,13 @@ export class PinballScene extends Phaser.Scene {
     this.resetRollovers()
     this.playSound('eclipseMultiball')
     this.shakeCamera('multiball')
-    this.flashPlayfield(0x58fff8)
-    this.balls.forEach((ball) => this.flashCircle(ball.image.x, ball.image.y, tableLayout.ball.radius * 2.2, 0x58fff8, tableLayout.juice.jackpotFlashDurationMs))
+    this.flashPlayfield(theme.eclipseRed)
+    this.balls.forEach((ball) => this.flashCircle(ball.image.x, ball.image.y, tableLayout.ball.radius * 2.2, theme.ember, tableLayout.juice.jackpotFlashDurationMs))
     this.addScore(tableLayout.tuning.eclipseMultiballStartScore)
     this.showScorePopup(tableLayout.table.width / 2, 650, 'ECLIPSE MULTIBALL', tableLayout.tuning.eclipseMultiballStartScore, {
       major: true,
       event: true,
-      color: '#9dffb8',
+      color: theme.css.ember,
     })
     this.activateBallSaver(tableLayout.tuning.eclipseMultiballBallSaveDurationMs)
     this.ballSaverArmed = false
@@ -1704,7 +1780,7 @@ export class PinballScene extends Phaser.Scene {
     this.addScore(points)
     this.showScorePopup(ball.image.x, ball.image.y - 64, `COMBO x${multiplier}`, points, {
       major: multiplier === 3,
-      color: '#58fff8',
+      color: theme.css.brightJade,
     })
   }
 
@@ -1764,8 +1840,8 @@ export class PinballScene extends Phaser.Scene {
       .text(x, y, points ? `${label} +${points}` : label, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: `${fontSize}px`,
-        color: options.color ?? '#fff4b0',
-        stroke: '#071018',
+        color: options.color ?? theme.css.agedGold,
+        stroke: theme.css.ink,
         strokeThickness: options.major ? 6 : 4,
       })
       .setOrigin(0.5)
@@ -1815,7 +1891,7 @@ export class PinballScene extends Phaser.Scene {
           ball.image.x,
           ball.image.y,
           tableLayout.ball.radius * tableLayout.juice.trailRadiusScale,
-          0x58fff8,
+          theme.ember,
           tableLayout.juice.trailAlpha,
         )
         .setDepth(9)
@@ -2015,24 +2091,96 @@ export class PinballScene extends Phaser.Scene {
     const graphics = this.playfieldGraphics
     graphics.clear()
 
+    graphics.fillStyle(theme.obsidian, 0.86)
+    graphics.fillRect(0, 0, tableLayout.table.width, tableLayout.table.height)
+
+    graphics.fillStyle(theme.charcoal, 0.54)
+    graphics.fillRect(74, 82, tableLayout.table.width - 148, tableLayout.table.height - 164)
+
+    for (let y = 150; y < tableLayout.table.height - 80; y += 125) {
+      graphics.lineStyle(1, y % 250 === 150 ? theme.goldShadow : theme.charcoal, y % 250 === 150 ? 0.15 : 0.32)
+      graphics.beginPath()
+      graphics.moveTo(110, y)
+      graphics.lineTo(tableLayout.table.width - 110, y + 34)
+      graphics.strokePath()
+    }
+
+    for (let x = 130; x < tableLayout.table.width - 90; x += 150) {
+      graphics.lineStyle(1, theme.goldShadow, 0.1)
+      graphics.beginPath()
+      graphics.moveTo(x, 150)
+      graphics.lineTo(x - 82, tableLayout.table.height - 165)
+      graphics.strokePath()
+    }
+
+    graphics.lineStyle(7, theme.goldShadow, 0.42)
+    graphics.strokeRect(96, 118, tableLayout.table.width - 192, tableLayout.table.height - 245)
+    graphics.lineStyle(2, theme.agedGold, 0.42)
+    graphics.strokeRect(122, 146, tableLayout.table.width - 244, tableLayout.table.height - 300)
+
+    tableLayout.wallSegments
+      .filter((segment) => segment.kind === 'orbit' || segment.kind === 'rampEntrance')
+      .forEach((segment) => {
+        graphics.lineStyle(Math.max(3, segment.thickness * 0.38), segment.kind === 'orbit' ? theme.agedGold : theme.jade, segment.kind === 'orbit' ? 0.26 : 0.22)
+        graphics.beginPath()
+        graphics.moveTo(segment.from.x, segment.from.y)
+        graphics.lineTo(segment.to.x, segment.to.y)
+        graphics.strokePath()
+      })
+
+    const jackpot = tableLayout.sensors.find((sensor) => sensor.kind === 'jackpot')
+    if (jackpot) {
+      graphics.fillStyle(theme.eclipseRed, 0.1)
+      graphics.fillCircle(jackpot.x, jackpot.y, 174)
+      graphics.lineStyle(9, theme.goldShadow, 0.46)
+      graphics.strokeCircle(jackpot.x, jackpot.y, 174)
+      graphics.lineStyle(4, theme.agedGold, 0.7)
+      graphics.strokeCircle(jackpot.x, jackpot.y, 132)
+      graphics.lineStyle(2, theme.ember, 0.44)
+      graphics.strokeCircle(jackpot.x, jackpot.y, 96)
+      graphics.lineStyle(3, theme.agedGold, 0.55)
+      graphics.beginPath()
+      graphics.moveTo(jackpot.x, jackpot.y - 164)
+      graphics.lineTo(jackpot.x + 142, jackpot.y + 84)
+      graphics.lineTo(jackpot.x - 142, jackpot.y + 84)
+      graphics.closePath()
+      graphics.strokePath()
+    }
+
     tableLayout.sensors
       .filter((sensor) => sensor.kind === 'targetBank')
       .forEach((target) => {
-        graphics.fillStyle(0x7cf7ff, 0.2)
+        graphics.fillStyle(theme.goldShadow, 0.48)
         graphics.fillRect(target.x - target.width / 2, target.y - target.height / 2, target.width, target.height)
+        graphics.lineStyle(2, theme.agedGold, 0.72)
+        graphics.strokeRect(target.x - target.width / 2, target.y - target.height / 2, target.width, target.height)
+        graphics.lineStyle(2, theme.brightJade, 0.34)
+        graphics.beginPath()
+        graphics.moveTo(target.x, target.y - target.height * 0.32)
+        graphics.lineTo(target.x, target.y + target.height * 0.32)
+        graphics.strokePath()
+      })
+
+    tableLayout.sensors
+      .filter((sensor) => sensor.kind === 'rollover')
+      .forEach((sensor) => {
+        graphics.fillStyle(theme.jade, 0.09)
+        graphics.fillCircle(sensor.x, sensor.y, 42)
+        graphics.lineStyle(2, theme.agedGold, 0.36)
+        graphics.strokeCircle(sensor.x, sensor.y, 42)
       })
 
     tableLayout.sensors
       .filter((sensor) => sensor.kind === 'shooterExit')
       .forEach((sensor) => {
-        graphics.lineStyle(3, 0xffd166, 0.35)
+        graphics.lineStyle(3, theme.agedGold, 0.34)
         graphics.strokeRect(sensor.x - sensor.width / 2, sensor.y - sensor.height / 2, sensor.width, sensor.height)
       })
 
     tableLayout.wallSegments
       .filter((segment) => segment.id === 'rightTrapFixGuide')
       .forEach((segment) => {
-        graphics.lineStyle(segment.thickness, 0xffd166, 0.22)
+        graphics.lineStyle(segment.thickness, theme.agedGold, 0.22)
         graphics.beginPath()
         graphics.moveTo(segment.from.x, segment.from.y)
         graphics.lineTo(segment.to.x, segment.to.y)
@@ -2047,7 +2195,7 @@ export class PinballScene extends Phaser.Scene {
     this.collisionBodies.forEach((body) => {
       const isSensor = body.isSensor
       const isBall = Boolean(this.ballFromBody(body))
-      graphics.lineStyle(isSensor ? 2 : 3, isBall ? 0xffffff : isSensor ? 0xffd166 : 0x00ff95, isSensor ? 0.65 : 0.82)
+      graphics.lineStyle(isSensor ? 2 : 3, isBall ? theme.ivory : isSensor ? theme.agedGold : theme.brightJade, isSensor ? 0.65 : 0.82)
 
       const parts = body.parts.length > 1 ? body.parts.slice(1) : [body]
       parts.forEach((part) => {
