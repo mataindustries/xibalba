@@ -192,11 +192,11 @@ export const tableLayout = {
     { id: 'top-left-arch', kind: 'orbit', from: { x: 137, y: 284 }, to: { x: 335, y: 96 }, thickness: 30 },
     { id: 'top-center-arch', kind: 'wall', from: { x: 335, y: 96 }, to: { x: 743, y: 96 }, thickness: 30 },
     { id: 'top-right-arch', kind: 'orbit', from: { x: 743, y: 96 }, to: { x: 938, y: 286 }, thickness: 30 },
-    { id: 'left-orbit-inner', kind: 'orbit', from: { x: 250, y: 325 }, to: { x: 232, y: 575 }, thickness: 16 },
+    { id: 'left-orbit-inner', kind: 'orbit', from: { x: 250, y: 325 }, to: { x: 238, y: 505 }, thickness: 16 },
     { id: 'right-orbit-inner', kind: 'orbit', from: { x: 888, y: 520 }, to: { x: 864, y: 670 }, thickness: 16 },
 
     // RAMP MOUTHS: simple open guides that feed the ball back toward the middle.
-    { id: 'left-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 226, y: 872 }, to: { x: 320, y: 820 }, thickness: 16 },
+    { id: 'left-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 226, y: 872 }, to: { x: 292, y: 842 }, thickness: 16 },
     { id: 'left-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 286, y: 972 }, to: { x: 360, y: 918 }, thickness: 12 },
     { id: 'right-ramp-mouth-upper', kind: 'rampEntrance', from: { x: 760, y: 820 }, to: { x: 854, y: 872 }, thickness: 16 },
     { id: 'right-ramp-mouth-lower', kind: 'rampEntrance', from: { x: 720, y: 918 }, to: { x: 794, y: 972 }, thickness: 12 },
