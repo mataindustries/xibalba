@@ -97,8 +97,15 @@ export const tableLayout = {
   table: {
     width: 1080,
     height: 1920,
-    backgroundPath: '/assets/playfield/neon-aztec-blockout.png',
-    backgroundAlpha: 0.62,
+    background: {
+      key: 'xibalba-playfield',
+      path: '/art/playfield/xibalba-playfield-v3-no-flippers-with-plunger.png',
+      // Source art is 941x1672; render it into the fixed 1080x1920 gameplay coordinate system.
+      x: 0,
+      y: 0,
+      width: 1080,
+      height: 1920,
+    },
   },
 
   physics: {

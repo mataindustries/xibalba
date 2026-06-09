@@ -67,15 +67,7 @@ type ScorePopupOptions = {
 
 const HIGH_SCORE_KEY = 'xibalba-pinball-high-score'
 const assets = {
-  playfield: {
-    key: 'xibalba-playfield',
-    path: '/art/playfield/xibalba-playfield-v1.png',
-    // The source art is 941x1672 and is scaled to the fixed 1080x1920 table coordinate system.
-    x: 0,
-    y: 0,
-    width: tableLayout.table.width,
-    height: tableLayout.table.height,
-  },
+  playfield: tableLayout.table.background,
   titleCard: {
     key: 'xibalba-title-card',
     path: '/art/ui/xibalba-title-card-v1.png',
@@ -136,7 +128,7 @@ export class PinballScene extends Phaser.Scene {
   private touchHintRight!: Phaser.GameObjects.Text
   private touchHintLaunch!: Phaser.GameObjects.Text
   private keys?: ControlKeys
-  private bumperVisuals = new Map<string, Phaser.GameObjects.Arc>()
+  private bumperVisuals = new Map<string, Phaser.GameObjects.Container>()
   private slingVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
   private rolloverVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
   private litRollovers = new Set<string>()
@@ -321,14 +313,33 @@ export class PinballScene extends Phaser.Scene {
       restitution: tableLayout.tuning.bumperBounce,
     })
 
-    const visual = this.add
-      .circle(bumper.x, bumper.y, bumper.radius * 0.68, theme.jade, 0.58)
-      .setStrokeStyle(4, theme.brightJade, 0.84)
-      .setDepth(4)
-    this.add.circle(bumper.x, bumper.y, bumper.radius * 0.28, theme.brightJade, 0.34).setDepth(4.1)
+    const visual = this.createBumperVisual(bumper)
     this.bumperVisuals.set(bumper.id, visual)
     this.collisionBodies.push(body)
     return body
+  }
+
+  private createBumperVisual(bumper: BumperBody) {
+    const radius = bumper.radius
+    const visual = this.add.container(bumper.x, bumper.y).setDepth(6)
+    const halo = this.add.circle(0, 0, radius * 1.22, theme.jade, 0.08).setStrokeStyle(2, theme.brightJade, 0.2)
+    const shadow = this.add.circle(0, 2, radius * 1.08, theme.ink, 0.72).setStrokeStyle(5, theme.goldShadow, 0.54)
+    const outerRing = this.add.circle(0, 0, radius, theme.goldShadow, 0.92).setStrokeStyle(7, theme.agedGold, 0.94)
+    const innerHousing = this.add.circle(0, 0, radius * 0.69, theme.obsidian, 0.98).setStrokeStyle(4, theme.goldShadow, 0.76)
+    const coreGlow = this.add.circle(0, 0, radius * 0.42, theme.jade, 0.5).setStrokeStyle(3, theme.brightJade, 0.86)
+    const core = this.add.circle(0, 0, radius * 0.24, theme.brightJade, 0.88)
+    const highlight = this.add.circle(-radius * 0.1, -radius * 0.12, radius * 0.08, theme.ivory, 0.52)
+
+    visual.add([halo, shadow, outerRing, innerHousing, coreGlow, core, highlight])
+
+    for (let index = 0; index < 8; index += 1) {
+      const angle = (Math.PI * 2 * index) / 8
+      const x = Math.cos(angle) * radius * 0.78
+      const y = Math.sin(angle) * radius * 0.78
+      visual.add(this.add.circle(x, y, radius * 0.055, theme.agedGold, 0.82))
+    }
+
+    return visual
   }
 
   private createSling(sling: SlingBody) {
@@ -2119,6 +2130,10 @@ export class PinballScene extends Phaser.Scene {
   private drawRuntimeInsertUnderlays() {
     const graphics = this.playfieldGraphics
     graphics.clear()
+    graphics.fillStyle(theme.obsidian, 0.42)
+    graphics.fillRoundedRect(292, 340, 500, 330, 52)
+    graphics.lineStyle(3, theme.goldShadow, 0.24)
+    graphics.strokeRoundedRect(292, 340, 500, 330, 52)
   }
 
   private drawDebugOverlay() {
