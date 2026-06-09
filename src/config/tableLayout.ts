@@ -99,7 +99,7 @@ export const tableLayout = {
     height: 1920,
     background: {
       key: 'xibalba-playfield',
-      path: '/art/playfield/xibalba-playfield-v3-no-flippers-with-plunger.png',
+      path: '/art/playfield/xibalba-playfield-v4-clean-with-plunger.png',
       // Source art is 941x1672; render it into the fixed 1080x1920 gameplay coordinate system.
       x: 0,
       y: 0,
@@ -263,20 +263,25 @@ export const tableLayout = {
     bumpers: {
       offsetX: 0,
       offsetY: 0,
-      scale: 0.82,
+      scale: 0.74,
+      perBumper: {
+        quetzal: { offsetX: 4, offsetY: 108 },
+        jaguar: { offsetX: -4, offsetY: 108 },
+        sun: { offsetX: -75, offsetY: 85 },
+      },
     },
     rollovers: {
       offsetX: 0,
-      offsetY: 0,
-      widthScale: 0.48,
-      heightScale: 0.5,
-      gapAdjust: 0,
+      offsetY: 116,
+      widthScale: 0.36,
+      heightScale: 0.32,
+      gapAdjust: -10,
     },
     plunger: {
       offsetX: 0,
-      offsetY: 0,
-      width: 24,
-      height: 118,
+      offsetY: -46,
+      width: 18,
+      height: 72,
     },
   },
 
