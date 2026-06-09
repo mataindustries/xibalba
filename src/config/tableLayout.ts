@@ -261,6 +261,9 @@ export const tableLayout = {
   wallSegments: [
     { id: 'left-outer-wall', kind: 'wall', from: { x: 137, y: 284 }, to: { x: 78, y: 1712 }, thickness: 34 },
     { id: 'right-outer-wall', kind: 'wall', from: { x: 938, y: 690 }, to: { x: 930, y: 1712 }, thickness: 34 },
+    // INVISIBLE CONTAINMENT: catches fast upper-left/top shots that get above the painted arch.
+    { id: 'upper-left-roof-containment', kind: 'wall', from: { x: 78, y: 70 }, to: { x: 820, y: 70 }, thickness: 36 },
+    { id: 'upper-left-return-guide', kind: 'wall', from: { x: 78, y: 70 }, to: { x: 137, y: 284 }, thickness: 36 },
     { id: 'top-left-arch', kind: 'orbit', from: { x: 137, y: 284 }, to: { x: 335, y: 96 }, thickness: 30 },
     { id: 'top-center-arch', kind: 'wall', from: { x: 335, y: 96 }, to: { x: 743, y: 96 }, thickness: 30 },
     { id: 'top-right-arch', kind: 'orbit', from: { x: 743, y: 96 }, to: { x: 938, y: 286 }, thickness: 30 },
@@ -303,6 +306,7 @@ export const tableLayout = {
     { id: 'left-outlane-save-post', kind: 'outlane', x: 238, y: 1288, radius: 15 },
     { id: 'right-outlane-save-post', kind: 'outlane', x: 842, y: 1288, radius: 15 },
     { id: 'plunger-feed-post', kind: 'plungerLane', x: 928, y: 332, radius: 14 },
+    { id: 'upper-left-containment-cap', kind: 'wall', x: 137, y: 284, radius: 22 },
   ] satisfies RoundedPost[],
 
   // SENSORS: all are non-colliding. Jackpot/rollovers add objectives without changing table geometry.

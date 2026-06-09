@@ -112,7 +112,7 @@ export class PinballScene extends Phaser.Scene {
   private collisionBodies: MatterJS.BodyType[] = []
   private debugGraphics!: Phaser.GameObjects.Graphics
   private playfieldGraphics!: Phaser.GameObjects.Graphics
-  private plungerVisual!: Phaser.GameObjects.Rectangle
+  private plungerVisual!: Phaser.GameObjects.Container
   private scoreText!: Phaser.GameObjects.Text
   private highScoreText!: Phaser.GameObjects.Text
   private ballStateText!: Phaser.GameObjects.Text
@@ -130,7 +130,7 @@ export class PinballScene extends Phaser.Scene {
   private keys?: ControlKeys
   private bumperVisuals = new Map<string, Phaser.GameObjects.Container>()
   private slingVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
-  private rolloverVisuals = new Map<string, Phaser.GameObjects.Rectangle>()
+  private rolloverVisuals = new Map<string, Phaser.GameObjects.Container>()
   private litRollovers = new Set<string>()
   private jackpotVisual?: Phaser.GameObjects.Rectangle
   private pointerControls = new Map<number, 'left' | 'right' | 'plunger'>()
@@ -286,10 +286,25 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private createRolloverVisual(sensor: SensorBody) {
-    const visual = this.add
-      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.charcoal, 0.08)
-      .setStrokeStyle(3, theme.goldShadow, 0.28)
-      .setDepth(3)
+    const visual = this.add.container(sensor.x, sensor.y).setDepth(4)
+    const backing = this.add
+      .rectangle(0, 0, sensor.width + 18, sensor.height + 16, theme.ink, 0.74)
+      .setStrokeStyle(3, theme.goldShadow, 0.42)
+      .setName('backing')
+    const insert = this.add
+      .rectangle(0, 0, sensor.width * 0.62, sensor.height * 0.68, theme.obsidian, 0.9)
+      .setStrokeStyle(3, theme.agedGold, 0.76)
+      .setName('insert')
+    const glow = this.add
+      .rectangle(0, 0, sensor.width * 0.82, sensor.height * 0.86, theme.jade, 0)
+      .setStrokeStyle(2, theme.brightJade, 0)
+      .setName('glow')
+    const glyph = this.add
+      .triangle(0, 1, 0, -12, 11, 10, -11, 10, theme.jade, 0.26)
+      .setStrokeStyle(2, theme.goldShadow, 0.5)
+      .setName('glyph')
+
+    visual.add([backing, glow, insert, glyph])
     visual.rotation = sensor.angle ?? 0
     this.rolloverVisuals.set(sensor.id, visual)
   }
@@ -322,15 +337,15 @@ export class PinballScene extends Phaser.Scene {
   private createBumperVisual(bumper: BumperBody) {
     const radius = bumper.radius
     const visual = this.add.container(bumper.x, bumper.y).setDepth(6)
-    const halo = this.add.circle(0, 0, radius * 1.22, theme.jade, 0.08).setStrokeStyle(2, theme.brightJade, 0.2)
-    const shadow = this.add.circle(0, 2, radius * 1.08, theme.ink, 0.72).setStrokeStyle(5, theme.goldShadow, 0.54)
-    const outerRing = this.add.circle(0, 0, radius, theme.goldShadow, 0.92).setStrokeStyle(7, theme.agedGold, 0.94)
-    const innerHousing = this.add.circle(0, 0, radius * 0.69, theme.obsidian, 0.98).setStrokeStyle(4, theme.goldShadow, 0.76)
-    const coreGlow = this.add.circle(0, 0, radius * 0.42, theme.jade, 0.5).setStrokeStyle(3, theme.brightJade, 0.86)
-    const core = this.add.circle(0, 0, radius * 0.24, theme.brightJade, 0.88)
+    const halo = this.add.circle(0, 0, radius * 1.36, theme.jade, 0.1).setStrokeStyle(2, theme.brightJade, 0.22)
+    const cover = this.add.circle(0, 0, radius * 1.18, theme.ink, 0.82).setStrokeStyle(5, theme.goldShadow, 0.5)
+    const outerRing = this.add.circle(0, 0, radius * 0.98, theme.goldShadow, 0.96).setStrokeStyle(8, theme.agedGold, 0.96)
+    const innerHousing = this.add.circle(0, 0, radius * 0.66, theme.obsidian, 0.98).setStrokeStyle(4, theme.goldShadow, 0.82)
+    const coreGlow = this.add.circle(0, 0, radius * 0.44, theme.jade, 0.56).setStrokeStyle(3, theme.brightJade, 0.9)
+    const core = this.add.circle(0, 0, radius * 0.24, theme.brightJade, 0.92)
     const highlight = this.add.circle(-radius * 0.1, -radius * 0.12, radius * 0.08, theme.ivory, 0.52)
 
-    visual.add([halo, shadow, outerRing, innerHousing, coreGlow, core, highlight])
+    visual.add([halo, cover, outerRing, innerHousing, coreGlow, core, highlight])
 
     for (let index = 0; index < 8; index += 1) {
       const angle = (Math.PI * 2 * index) / 8
@@ -437,10 +452,37 @@ export class PinballScene extends Phaser.Scene {
 
   private createPlungerVisual() {
     const plunger = tableLayout.plunger
-    this.plungerVisual = this.add
-      .rectangle(plunger.x, plunger.restY, plunger.width, plunger.height, theme.agedGold, 0.9)
-      .setStrokeStyle(3, theme.ivory, 0.72)
-      .setDepth(6)
+    this.add
+      .rectangle(plunger.x, plunger.restY - 240, plunger.width + 42, 560, theme.ink, 0.58)
+      .setStrokeStyle(4, theme.goldShadow, 0.58)
+      .setDepth(5.4)
+    this.add
+      .rectangle(plunger.x - 23, plunger.restY - 240, 6, 520, theme.agedGold, 0.82)
+      .setStrokeStyle(1, theme.ivory, 0.28)
+      .setDepth(5.5)
+    this.add
+      .rectangle(plunger.x + 23, plunger.restY - 240, 6, 520, theme.agedGold, 0.82)
+      .setStrokeStyle(1, theme.ivory, 0.28)
+      .setDepth(5.5)
+    this.add
+      .rectangle(plunger.x, plunger.restY - 240, 22, 472, theme.obsidian, 0.68)
+      .setStrokeStyle(2, theme.goldShadow, 0.46)
+      .setDepth(5.55)
+
+    const handle = this.add
+      .rectangle(0, 0, plunger.width, plunger.height, theme.goldShadow, 0.98)
+      .setStrokeStyle(4, theme.agedGold, 0.96)
+    const grip = this.add.rectangle(0, -plunger.height * 0.12, plunger.width * 0.48, plunger.height * 0.62, theme.obsidian, 0.92)
+    const accent = this.add
+      .rectangle(0, plunger.height * 0.22, plunger.width * 0.38, 12, theme.jade, 0.78)
+      .setStrokeStyle(1, theme.brightJade, 0.7)
+      .setName('accent')
+    const chargeGlow = this.add
+      .circle(0, -plunger.height * 0.36, plunger.width * 0.22, theme.ember, 0.18)
+      .setStrokeStyle(2, theme.agedGold, 0.54)
+      .setName('chargeGlow')
+
+    this.plungerVisual = this.add.container(plunger.x, plunger.restY, [handle, grip, accent, chargeGlow]).setDepth(6.4)
   }
 
   private createHud() {
@@ -1267,6 +1309,11 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.plungerVisual.y = tableLayout.plunger.restY + this.plungerCharge * tableLayout.plunger.chargeTravel
+    const chargeGlow = this.plungerVisual.getByName('chargeGlow') as Phaser.GameObjects.Arc | null
+    const accent = this.plungerVisual.getByName('accent') as Phaser.GameObjects.Rectangle | null
+    chargeGlow?.setAlpha(0.18 + this.plungerCharge * 0.58)
+    chargeGlow?.setScale(1 + this.plungerCharge * 0.45)
+    accent?.setFillStyle(this.plungerCharge > 0.66 ? theme.ember : theme.jade, 0.78)
   }
 
   private releasePlunger() {
@@ -1706,8 +1753,19 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
-    visual.setFillStyle(lit ? theme.jade : theme.charcoal, lit ? 0.72 : 0.08)
-    visual.setStrokeStyle(3, lit ? theme.brightJade : theme.goldShadow, lit ? 0.9 : 0.28)
+    const backing = visual.getByName('backing') as Phaser.GameObjects.Rectangle | null
+    const glow = visual.getByName('glow') as Phaser.GameObjects.Rectangle | null
+    const insert = visual.getByName('insert') as Phaser.GameObjects.Rectangle | null
+    const glyph = visual.getByName('glyph') as Phaser.GameObjects.Triangle | null
+
+    backing?.setFillStyle(theme.ink, lit ? 0.66 : 0.74)
+    backing?.setStrokeStyle(3, lit ? theme.agedGold : theme.goldShadow, lit ? 0.74 : 0.42)
+    glow?.setFillStyle(theme.jade, lit ? 0.22 : 0)
+    glow?.setStrokeStyle(2, theme.brightJade, lit ? 0.58 : 0)
+    insert?.setFillStyle(lit ? theme.jade : theme.obsidian, lit ? 0.78 : 0.9)
+    insert?.setStrokeStyle(3, lit ? theme.brightJade : theme.agedGold, lit ? 0.95 : 0.76)
+    glyph?.setFillStyle(lit ? theme.brightJade : theme.jade, lit ? 0.82 : 0.26)
+    glyph?.setStrokeStyle(2, lit ? theme.ivory : theme.goldShadow, lit ? 0.62 : 0.5)
   }
 
   private resetRollovers() {
@@ -2130,10 +2188,15 @@ export class PinballScene extends Phaser.Scene {
   private drawRuntimeInsertUnderlays() {
     const graphics = this.playfieldGraphics
     graphics.clear()
-    graphics.fillStyle(theme.obsidian, 0.42)
-    graphics.fillRoundedRect(292, 340, 500, 330, 52)
+    graphics.fillStyle(theme.obsidian, 0.62)
+    graphics.fillRoundedRect(286, 336, 520, 350, 58)
+    graphics.lineStyle(4, theme.goldShadow, 0.34)
+    graphics.strokeRoundedRect(286, 336, 520, 350, 58)
+
+    graphics.fillStyle(theme.obsidian, 0.48)
+    graphics.fillRoundedRect(342, 706, 396, 110, 24)
     graphics.lineStyle(3, theme.goldShadow, 0.24)
-    graphics.strokeRoundedRect(292, 340, 500, 330, 52)
+    graphics.strokeRoundedRect(342, 706, 396, 110, 24)
   }
 
   private drawDebugOverlay() {
