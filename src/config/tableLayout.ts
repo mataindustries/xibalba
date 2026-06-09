@@ -257,6 +257,29 @@ export const tableLayout = {
     touchArea: { x: 875, y: 1270, width: 205, height: 650 },
   },
 
+  // VISUAL ONLY: these values nudge drawn inserts to match the painted art.
+  // They do not move physics bodies, sensors, plunger mechanics, or scoring zones.
+  visualAlignment: {
+    bumpers: {
+      offsetX: 0,
+      offsetY: 0,
+      scale: 0.82,
+    },
+    rollovers: {
+      offsetX: 0,
+      offsetY: 0,
+      widthScale: 0.48,
+      heightScale: 0.5,
+      gapAdjust: 0,
+    },
+    plunger: {
+      offsetX: 0,
+      offsetY: 0,
+      width: 24,
+      height: 118,
+    },
+  },
+
   // ORBITS AND OUTER WALLS: approximate broad guide rails, leaving the center jackpot lane open.
   wallSegments: [
     { id: 'left-outer-wall', kind: 'wall', from: { x: 137, y: 284 }, to: { x: 78, y: 1712 }, thickness: 34 },
