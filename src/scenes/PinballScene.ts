@@ -66,6 +66,26 @@ type ScorePopupOptions = {
 }
 
 const HIGH_SCORE_KEY = 'xibalba-pinball-high-score'
+const assets = {
+  playfield: {
+    key: 'xibalba-playfield',
+    path: '/art/playfield/xibalba-playfield-v1.png',
+    // The source art is 941x1672 and is scaled to the fixed 1080x1920 table coordinate system.
+    x: 0,
+    y: 0,
+    width: tableLayout.table.width,
+    height: tableLayout.table.height,
+  },
+  titleCard: {
+    key: 'xibalba-title-card',
+    path: '/art/ui/xibalba-title-card-v1.png',
+    // Same source aspect as the playfield; keep full-table display for menu/game alignment.
+    x: 0,
+    y: 0,
+    width: tableLayout.table.width,
+    height: tableLayout.table.height,
+  },
+} as const
 const theme = {
   obsidian: 0x0b0b0f,
   charcoal: 0x1a1a1f,
@@ -152,7 +172,8 @@ export class PinballScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('blockout', tableLayout.table.backgroundPath)
+    this.load.image(assets.playfield.key, assets.playfield.path)
+    this.load.image(assets.titleCard.key, assets.titleCard.path)
   }
 
   create() {
@@ -160,11 +181,9 @@ export class PinballScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(theme.css.obsidian)
 
     this.add
-      .image(0, 0, 'blockout')
+      .image(assets.playfield.x, assets.playfield.y, assets.playfield.key)
       .setOrigin(0)
-      .setDisplaySize(tableLayout.table.width, tableLayout.table.height)
-      .setTint(theme.charcoal)
-      .setAlpha(tableLayout.table.backgroundAlpha * 0.42)
+      .setDisplaySize(assets.playfield.width, assets.playfield.height)
       .setDepth(0)
 
     this.createBallTexture()
@@ -188,7 +207,7 @@ export class PinballScene extends Phaser.Scene {
     this.createPauseOverlay()
     this.bindInput()
     this.bindCollisions()
-    this.drawPremiumPlayfield()
+    this.drawRuntimeInsertUnderlays()
     this.setGameplayFrozen(true)
   }
 
@@ -266,50 +285,20 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private createJackpotVisual(sensor: SensorBody) {
-    // TUNING: this low-alpha gate marks the jackpot sensor without changing collision geometry.
-    this.add
-      .ellipse(sensor.x, sensor.y, sensor.width * 2.05, sensor.height * 2.25, theme.eclipseRed, 0.14)
-      .setStrokeStyle(8, theme.goldShadow, 0.48)
-      .setDepth(2.7)
-
-    this.add
-      .rectangle(sensor.x, sensor.y + 4, sensor.width * 1.72, sensor.height * 1.38, theme.ink, 0.66)
-      .setStrokeStyle(7, theme.goldShadow, 0.72)
-      .setDepth(2.8)
-
-    this.add
-      .rectangle(sensor.x, sensor.y - 76, sensor.width * 1.34, 34, theme.goldShadow, 0.76)
-      .setStrokeStyle(3, theme.agedGold, 0.78)
-      .setDepth(2.9)
-
-    this.add
-      .rectangle(sensor.x, sensor.y - 110, sensor.width * 0.95, 28, theme.agedGold, 0.6)
-      .setStrokeStyle(2, theme.ivory, 0.26)
-      .setDepth(2.9)
-
-    this.add
-      .rectangle(sensor.x, sensor.y + 74, sensor.width * 1.48, 24, theme.goldShadow, 0.68)
-      .setStrokeStyle(2, theme.agedGold, 0.6)
-      .setDepth(2.9)
-
-    this.add.ellipse(sensor.x, sensor.y + 6, sensor.width * 0.72, sensor.height * 0.66, theme.jade, 0.16).setDepth(2.95)
+    // Runtime-only jackpot glow; static temple art comes from the playfield PNG.
     this.jackpotVisual = this.add
-      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.eclipseRed, 0.24)
-      .setStrokeStyle(5, theme.agedGold, 0.84)
+      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.eclipseRed, 0.08)
+      .setStrokeStyle(4, theme.agedGold, 0.36)
       .setDepth(3)
     this.jackpotVisual.rotation = sensor.angle ?? 0
   }
 
   private createRolloverVisual(sensor: SensorBody) {
     const visual = this.add
-      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.charcoal, 0.76)
-      .setStrokeStyle(3, theme.agedGold, 0.7)
+      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.charcoal, 0.08)
+      .setStrokeStyle(3, theme.goldShadow, 0.28)
       .setDepth(3)
     visual.rotation = sensor.angle ?? 0
-    this.add
-      .rectangle(sensor.x, sensor.y, sensor.width * 0.42, sensor.height * 0.58, theme.ink, 0.34)
-      .setStrokeStyle(1, theme.goldShadow, 0.54)
-      .setDepth(3.05)
     this.rolloverVisuals.set(sensor.id, visual)
   }
 
@@ -332,7 +321,6 @@ export class PinballScene extends Phaser.Scene {
       restitution: tableLayout.tuning.bumperBounce,
     })
 
-    this.bumperOrnament(bumper)
     const visual = this.add
       .circle(bumper.x, bumper.y, bumper.radius * 0.68, theme.jade, 0.58)
       .setStrokeStyle(4, theme.brightJade, 0.84)
@@ -588,73 +576,19 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private createStartOverlay() {
-    const panel = this.add
-      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, theme.obsidian, 0.9)
+    const titleArt = this.add
+      .image(assets.titleCard.x, assets.titleCard.y, assets.titleCard.key)
+      .setOrigin(0)
+      .setDisplaySize(assets.titleCard.width, assets.titleCard.height)
       .setDepth(90)
 
-    const stone = this.add
-      .rectangle(tableLayout.table.width / 2, 885, 780, 760, theme.charcoal, 0.26)
-      .setStrokeStyle(5, theme.goldShadow, 0.42)
-      .setDepth(90.2)
-
-    const halo = this.add
-      .ellipse(tableLayout.table.width / 2, 610, 620, 360, theme.eclipseRed, 0.1)
-      .setStrokeStyle(5, theme.goldShadow, 0.52)
-      .setDepth(90.5)
-
-    const frame = this.add
-      .rectangle(tableLayout.table.width / 2, 610, 720, 310, theme.charcoal, 0.22)
-      .setStrokeStyle(3, theme.agedGold, 0.56)
+    const textPlate = this.add
+      .rectangle(tableLayout.table.width / 2, 1035, 690, 360, theme.ink, 0.62)
+      .setStrokeStyle(3, theme.goldShadow, 0.54)
       .setDepth(90.6)
 
-    const crownTop = this.add
-      .rectangle(tableLayout.table.width / 2, 418, 430, 34, theme.goldShadow, 0.72)
-      .setStrokeStyle(2, theme.agedGold, 0.72)
-      .setDepth(90.7)
-
-    const crownMid = this.add
-      .rectangle(tableLayout.table.width / 2, 454, 540, 34, theme.goldShadow, 0.62)
-      .setStrokeStyle(2, theme.agedGold, 0.66)
-      .setDepth(90.7)
-
-    const crownBase = this.add
-      .rectangle(tableLayout.table.width / 2, 490, 650, 34, theme.goldShadow, 0.54)
-      .setStrokeStyle(2, theme.agedGold, 0.58)
-      .setDepth(90.7)
-
-    const eclipse = this.add
-      .circle(tableLayout.table.width / 2, 560, 84, theme.eclipseRed, 0.22)
-      .setStrokeStyle(5, theme.agedGold, 0.46)
-      .setDepth(90.8)
-
-    const eclipseCore = this.add.circle(tableLayout.table.width / 2, 560, 48, theme.ink, 0.82).setDepth(90.85)
-
-    const title = this.add
-      .text(tableLayout.table.width / 2, 560, 'XIBALBA PINBALL', {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '72px',
-        color: theme.css.bone,
-        stroke: theme.css.ink,
-        strokeThickness: 8,
-        align: 'center',
-      })
-      .setOrigin(0.5)
-      .setDepth(91)
-
-    const subtitle = this.add
-      .text(tableLayout.table.width / 2, 642, 'Obsidian Underworld Temple', {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '28px',
-        color: theme.css.agedGold,
-        stroke: theme.css.ink,
-        strokeThickness: 5,
-        align: 'center',
-      })
-      .setOrigin(0.5)
-      .setDepth(91)
-
     const high = this.add
-      .text(tableLayout.table.width / 2, 735, `HIGH SCORE ${this.highScore}`, {
+      .text(tableLayout.table.width / 2, 905, `HIGH SCORE ${this.highScore}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '24px',
         color: theme.css.brightJade,
@@ -667,7 +601,7 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(91)
 
     const prompt = this.add
-      .text(tableLayout.table.width / 2, 870, 'Tap / Press Space to Start', {
+      .text(tableLayout.table.width / 2, 1000, 'Tap / Press Space to Start', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '34px',
         color: theme.css.ivory,
@@ -681,7 +615,7 @@ export class PinballScene extends Phaser.Scene {
     const controls = this.add
       .text(
         tableLayout.table.width / 2,
-        1010,
+        1128,
         ['A / Left  left flipper', 'D / Right  right flipper', 'Space / Down  launch', 'P pause   R restart'].join('\n'),
         {
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -697,7 +631,7 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(91)
 
     const dev = this.add
-      .text(tableLayout.table.width / 2, 1248, '` or F1 toggles dev tools', {
+      .text(tableLayout.table.width / 2, 1292, '` or F1 toggles dev tools', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '18px',
         color: theme.css.goldShadow,
@@ -708,9 +642,7 @@ export class PinballScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(91)
 
-    this.startOverlay = this.add
-      .container(0, 0, [panel, stone, halo, frame, crownTop, crownMid, crownBase, eclipse, eclipseCore, title, subtitle, high, prompt, controls, dev])
-      .setDepth(90)
+    this.startOverlay = this.add.container(0, 0, [titleArt, textPlate, high, prompt, controls, dev]).setDepth(90)
   }
 
   private createPauseOverlay() {
@@ -1763,8 +1695,8 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
-    visual.setFillStyle(lit ? theme.jade : theme.charcoal, lit ? 0.72 : 0.62)
-    visual.setStrokeStyle(3, lit ? theme.brightJade : theme.goldShadow, lit ? 0.9 : 0.68)
+    visual.setFillStyle(lit ? theme.jade : theme.charcoal, lit ? 0.72 : 0.08)
+    visual.setStrokeStyle(3, lit ? theme.brightJade : theme.goldShadow, lit ? 0.9 : 0.28)
   }
 
   private resetRollovers() {
@@ -2184,242 +2116,9 @@ export class PinballScene extends Phaser.Scene {
     return value.toFixed(1).padStart(6, ' ')
   }
 
-  private goldTrimLine(graphics: Phaser.GameObjects.Graphics, from: Point, to: Point, width: number, alpha = 0.42) {
-    graphics.lineStyle(width + 4, theme.goldShadow, alpha * 0.72)
-    graphics.beginPath()
-    graphics.moveTo(from.x, from.y)
-    graphics.lineTo(to.x, to.y)
-    graphics.strokePath()
-
-    graphics.lineStyle(Math.max(1, width), theme.agedGold, alpha)
-    graphics.beginPath()
-    graphics.moveTo(from.x, from.y)
-    graphics.lineTo(to.x, to.y)
-    graphics.strokePath()
-  }
-
-  private stonePanel(graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number, alpha = 0.42) {
-    graphics.fillStyle(theme.charcoal, alpha)
-    graphics.fillRect(x, y, width, height)
-    graphics.lineStyle(5, theme.ink, alpha * 0.62)
-    graphics.strokeRect(x, y, width, height)
-    graphics.lineStyle(2, theme.goldShadow, alpha * 0.7)
-    graphics.strokeRect(x + 8, y + 8, width - 16, height - 16)
-
-    graphics.lineStyle(1, theme.bone, 0.035)
-    for (let offset = 26; offset < width - 20; offset += 62) {
-      graphics.beginPath()
-      graphics.moveTo(x + offset, y + 12)
-      graphics.lineTo(x + offset - 24, y + height - 16)
-      graphics.strokePath()
-    }
-  }
-
-  private glyphTile(graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number, lit = false) {
-    const fillColor = lit ? theme.jade : theme.charcoal
-    const glowColor = lit ? theme.brightJade : theme.goldShadow
-    graphics.fillStyle(fillColor, lit ? 0.3 : 0.46)
-    graphics.fillRoundedRect(x - width / 2, y - height / 2, width, height, 6)
-    graphics.lineStyle(4, theme.goldShadow, lit ? 0.64 : 0.46)
-    graphics.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 6)
-    graphics.lineStyle(2, glowColor, lit ? 0.76 : 0.34)
-    graphics.strokeRoundedRect(x - width / 2 + 7, y - height / 2 + 7, width - 14, height - 14, 3)
-
-    graphics.lineStyle(2, glowColor, lit ? 0.58 : 0.2)
-    graphics.beginPath()
-    graphics.moveTo(x - width * 0.18, y - height * 0.18)
-    graphics.lineTo(x + width * 0.18, y)
-    graphics.lineTo(x - width * 0.12, y + height * 0.22)
-    graphics.strokePath()
-  }
-
-  private templeFrame(graphics: Phaser.GameObjects.Graphics, sensor: SensorBody) {
-    const x = sensor.x
-    const y = sensor.y
-    graphics.fillStyle(theme.ink, 0.64)
-    graphics.fillRect(x - 184, y - 112, 368, 236)
-    graphics.lineStyle(10, theme.goldShadow, 0.58)
-    graphics.strokeRect(x - 184, y - 112, 368, 236)
-    graphics.lineStyle(4, theme.agedGold, 0.78)
-    graphics.strokeRect(x - 156, y - 84, 312, 180)
-
-    const steps = [
-      { w: 300, yy: y - 150 },
-      { w: 250, yy: y - 178 },
-      { w: 198, yy: y - 204 },
-      { w: 142, yy: y - 228 },
-    ]
-
-    steps.forEach((step, index) => {
-      graphics.fillStyle(index % 2 === 0 ? theme.goldShadow : theme.agedGold, index % 2 === 0 ? 0.58 : 0.46)
-      graphics.fillRect(x - step.w / 2, step.yy, step.w, 24)
-      graphics.lineStyle(2, theme.agedGold, 0.58)
-      graphics.strokeRect(x - step.w / 2, step.yy, step.w, 24)
-    })
-
-    graphics.fillStyle(theme.eclipseRed, 0.15)
-    graphics.fillCircle(x, y + 4, 102)
-    graphics.lineStyle(6, theme.ember, 0.34)
-    graphics.strokeCircle(x, y + 4, 102)
-    graphics.lineStyle(3, theme.brightJade, 0.26)
-    graphics.strokeCircle(x, y + 4, 62)
-
-    graphics.lineStyle(3, theme.agedGold, 0.48)
-    graphics.beginPath()
-    graphics.moveTo(x - 126, y + 100)
-    graphics.lineTo(x - 84, y + 48)
-    graphics.lineTo(x - 42, y + 100)
-    graphics.moveTo(x + 126, y + 100)
-    graphics.lineTo(x + 84, y + 48)
-    graphics.lineTo(x + 42, y + 100)
-    graphics.strokePath()
-  }
-
-  private glowingInsert(graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, color: number, lit = false) {
-    graphics.fillStyle(color, lit ? 0.18 : 0.07)
-    graphics.fillCircle(x, y, radius * 1.75)
-    graphics.fillStyle(theme.ink, 0.78)
-    graphics.fillCircle(x, y, radius * 1.06)
-    graphics.lineStyle(3, theme.goldShadow, 0.62)
-    graphics.strokeCircle(x, y, radius * 1.1)
-    graphics.fillStyle(color, lit ? 0.72 : 0.32)
-    graphics.fillCircle(x, y, radius * 0.58)
-  }
-
-  private bumperOrnament(bumper: BumperBody) {
-    this.add.circle(bumper.x, bumper.y, bumper.radius * 1.72, theme.ink, 0.64).setStrokeStyle(5, theme.goldShadow, 0.52).setDepth(3.6)
-    this.add.circle(bumper.x, bumper.y, bumper.radius * 1.42, theme.agedGold, 0.12).setStrokeStyle(5, theme.agedGold, 0.62).setDepth(3.7)
-    this.add.circle(bumper.x, bumper.y, bumper.radius * 1.08, theme.charcoal, 0.88).setStrokeStyle(4, theme.goldShadow, 0.84).setDepth(3.85)
-
-    for (let index = 0; index < 8; index += 1) {
-      const angle = (Math.PI * 2 * index) / 8
-      const x = bumper.x + Math.cos(angle) * bumper.radius * 1.34
-      const y = bumper.y + Math.sin(angle) * bumper.radius * 1.34
-      this.add.circle(x, y, 4, theme.agedGold, 0.52).setDepth(3.95)
-    }
-  }
-
-  private serpentFlourish(graphics: Phaser.GameObjects.Graphics, side: 'left' | 'right') {
-    const sign = side === 'left' ? 1 : -1
-    const startX = side === 'left' ? 150 : tableLayout.table.width - 150
-    graphics.lineStyle(5, theme.goldShadow, 0.16)
-    graphics.beginPath()
-    graphics.moveTo(startX, 520)
-    for (let index = 0; index < 7; index += 1) {
-      const y = 600 + index * 112
-      const x = startX + sign * (index % 2 === 0 ? 52 : 12)
-      graphics.lineTo(x, y)
-    }
-    graphics.strokePath()
-
-    graphics.lineStyle(2, theme.agedGold, 0.18)
-    graphics.beginPath()
-    graphics.moveTo(startX + sign * 18, 540)
-    for (let index = 0; index < 7; index += 1) {
-      const y = 620 + index * 112
-      const x = startX + sign * (index % 2 === 0 ? 78 : 34)
-      graphics.lineTo(x, y)
-    }
-    graphics.strokePath()
-  }
-
-  private drawPremiumPlayfield() {
+  private drawRuntimeInsertUnderlays() {
     const graphics = this.playfieldGraphics
     graphics.clear()
-
-    graphics.fillStyle(theme.obsidian, 0.95)
-    graphics.fillRect(0, 0, tableLayout.table.width, tableLayout.table.height)
-
-    this.stonePanel(graphics, 72, 82, tableLayout.table.width - 144, tableLayout.table.height - 172, 0.5)
-    this.stonePanel(graphics, 150, 210, tableLayout.table.width - 300, 520, 0.24)
-    this.stonePanel(graphics, 168, 830, tableLayout.table.width - 336, 420, 0.2)
-    this.stonePanel(graphics, 142, 1320, tableLayout.table.width - 284, 430, 0.18)
-
-    for (let y = 160; y < tableLayout.table.height - 110; y += 96) {
-      graphics.lineStyle(1, y % 192 === 160 ? theme.goldShadow : theme.bone, y % 192 === 160 ? 0.16 : 0.035)
-      graphics.beginPath()
-      graphics.moveTo(108, y)
-      graphics.lineTo(tableLayout.table.width - 112, y + 26)
-      graphics.strokePath()
-    }
-
-    for (let x = 130; x < tableLayout.table.width - 90; x += 118) {
-      graphics.lineStyle(1, theme.goldShadow, 0.09)
-      graphics.beginPath()
-      graphics.moveTo(x, 150)
-      graphics.lineTo(x - 68, tableLayout.table.height - 178)
-      graphics.strokePath()
-    }
-
-    graphics.lineStyle(11, theme.goldShadow, 0.48)
-    graphics.strokeRoundedRect(92, 116, tableLayout.table.width - 184, tableLayout.table.height - 238, 14)
-    graphics.lineStyle(4, theme.agedGold, 0.62)
-    graphics.strokeRoundedRect(116, 142, tableLayout.table.width - 232, tableLayout.table.height - 294, 8)
-    graphics.lineStyle(2, theme.bone, 0.13)
-    graphics.strokeRoundedRect(136, 164, tableLayout.table.width - 272, tableLayout.table.height - 338, 5)
-
-    this.serpentFlourish(graphics, 'left')
-    this.serpentFlourish(graphics, 'right')
-
-    tableLayout.wallSegments
-      .filter((segment) => ['orbit', 'rampEntrance', 'inlane', 'outlane', 'plungerLane'].includes(segment.kind))
-      .forEach((segment) => {
-        const width = segment.kind === 'plungerLane' ? 5 : Math.max(3, segment.thickness * 0.3)
-        const alpha = segment.kind === 'rampEntrance' ? 0.36 : 0.26
-        this.goldTrimLine(graphics, segment.from, segment.to, width, alpha)
-      })
-
-    const jackpot = tableLayout.sensors.find((sensor) => sensor.kind === 'jackpot')
-    if (jackpot) {
-      this.templeFrame(graphics, jackpot)
-    }
-
-    tableLayout.sensors
-      .filter((sensor) => sensor.kind === 'targetBank')
-      .forEach((target) => {
-        graphics.save()
-        graphics.translateCanvas(target.x, target.y)
-        graphics.rotateCanvas(target.angle ?? 0)
-        this.glyphTile(graphics, 0, 0, target.width * 1.55, target.height * 1.1, false)
-        graphics.lineStyle(2, target.x < tableLayout.table.width / 2 ? theme.brightJade : theme.ember, 0.34)
-        graphics.beginPath()
-        graphics.moveTo(0, -target.height * 0.32)
-        graphics.lineTo(0, target.height * 0.32)
-        graphics.strokePath()
-        graphics.restore()
-      })
-
-    tableLayout.sensors
-      .filter((sensor) => sensor.kind === 'rollover')
-      .forEach((sensor) => {
-        this.glyphTile(graphics, sensor.x, sensor.y, sensor.width * 1.36, sensor.height * 1.18, this.litRollovers.has(sensor.id))
-      })
-
-    tableLayout.bumpers.forEach((bumper) => {
-      this.glowingInsert(graphics, bumper.x, bumper.y, bumper.radius * 0.82, theme.jade, false)
-      graphics.lineStyle(2, theme.goldShadow, 0.28)
-      graphics.strokeCircle(bumper.x, bumper.y, bumper.radius * 1.86)
-    })
-
-    const insertPoints = [
-      { x: 270, y: 640, color: theme.jade },
-      { x: 810, y: 640, color: theme.jade },
-      { x: 340, y: 1235, color: theme.ember },
-      { x: 740, y: 1235, color: theme.ember },
-      { x: 540, y: 1320, color: theme.agedGold },
-    ]
-    insertPoints.forEach((insert) => this.glowingInsert(graphics, insert.x, insert.y, 18, insert.color, false))
-
-    tableLayout.sensors
-      .filter((sensor) => sensor.kind === 'shooterExit')
-      .forEach((sensor) => {
-        graphics.lineStyle(3, theme.agedGold, 0.3)
-        graphics.strokeRoundedRect(sensor.x - sensor.width / 2, sensor.y - sensor.height / 2, sensor.width, sensor.height, 12)
-      })
-
-    tableLayout.wallSegments
-      .filter((segment) => segment.id === 'rightTrapFixGuide')
-      .forEach((segment) => this.goldTrimLine(graphics, segment.from, segment.to, segment.thickness * 0.55, 0.22))
   }
 
   private drawDebugOverlay() {
