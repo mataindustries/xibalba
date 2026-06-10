@@ -239,7 +239,7 @@ export const tableLayout = {
 
   multiball: {
     launches: [
-      { position: { x: 540, y: 1080 }, velocity: { x: 0, y: -10 } },
+      { position: { x: 505, y: 1045 }, velocity: { x: -4.2, y: -9.2 } },
       { position: { x: 430, y: 1180 }, velocity: { x: -2, y: -8 } },
       { position: { x: 650, y: 1180 }, velocity: { x: 2, y: -8 } },
     ] satisfies BallLaunch[],
@@ -263,19 +263,19 @@ export const tableLayout = {
     bumpers: {
       offsetX: 0,
       offsetY: 0,
-      scale: 0.74,
+      scale: 1.12,
       perBumper: {
-        quetzal: { offsetX: 4, offsetY: 108 },
-        jaguar: { offsetX: -4, offsetY: 108 },
-        sun: { offsetX: -75, offsetY: 85 },
+        quetzal: { offsetX: 0, offsetY: 0 },
+        jaguar: { offsetX: 0, offsetY: 0 },
+        sun: { offsetX: 0, offsetY: 0 },
       },
     },
     rollovers: {
       offsetX: 0,
-      offsetY: 116,
-      widthScale: 0.36,
-      heightScale: 0.32,
-      gapAdjust: -10,
+      offsetY: 0,
+      widthScale: 0.92,
+      heightScale: 0.86,
+      gapAdjust: 0,
     },
     plunger: {
       offsetX: 0,
@@ -354,11 +354,11 @@ export const tableLayout = {
     // TEMPLE JACKPOT: move this gate sensor to tune the center jackpot shot.
     { id: 'temple-jackpot', kind: 'jackpot', x: 540, y: 365, width: 190, height: 100, score: 10000 },
     // UPPER ROLLOVERS: five lane sensors under the temple gate.
-    { id: 'rollover-1', kind: 'rollover', x: 380, y: 760, width: 54, height: 78, score: 1000 },
-    { id: 'rollover-2', kind: 'rollover', x: 460, y: 760, width: 54, height: 78, score: 1000 },
-    { id: 'rollover-3', kind: 'rollover', x: 540, y: 760, width: 54, height: 78, score: 1000 },
-    { id: 'rollover-4', kind: 'rollover', x: 620, y: 760, width: 54, height: 78, score: 1000 },
-    { id: 'rollover-5', kind: 'rollover', x: 700, y: 760, width: 54, height: 78, score: 1000 },
+    { id: 'rollover-1', kind: 'rollover', x: 360, y: 870, width: 64, height: 46, score: 1000 },
+    { id: 'rollover-2', kind: 'rollover', x: 450, y: 870, width: 64, height: 46, score: 1000 },
+    { id: 'rollover-3', kind: 'rollover', x: 540, y: 870, width: 64, height: 46, score: 1000 },
+    { id: 'rollover-4', kind: 'rollover', x: 630, y: 870, width: 64, height: 46, score: 1000 },
+    { id: 'rollover-5', kind: 'rollover', x: 720, y: 870, width: 64, height: 46, score: 1000 },
     { id: 'left-target-1', kind: 'targetBank', x: 318, y: 952, width: 32, height: 96, angle: -0.38, score: 250 },
     { id: 'left-target-2', kind: 'targetBank', x: 366, y: 1036, width: 32, height: 96, angle: -0.38, score: 250 },
     { id: 'right-target-1', kind: 'targetBank', x: 762, y: 952, width: 32, height: 96, angle: 0.38, score: 250 },
@@ -397,9 +397,9 @@ export const tableLayout = {
 
   // BUMPER NEST: three simple circular bumpers around the upper-middle blockout.
   bumpers: [
-    { id: 'quetzal', x: 392, y: 560, radius: 40, score: 1000 },
-    { id: 'jaguar', x: 688, y: 560, radius: 40, score: 1000 },
-    { id: 'sun', x: 615, y: 425, radius: 40, score: 1000 },
+    { id: 'quetzal', x: 402, y: 672, radius: 44, score: 1000 },
+    { id: 'jaguar', x: 678, y: 672, radius: 44, score: 1000 },
+    { id: 'sun', x: 606, y: 532, radius: 44, score: 1000 },
   ] satisfies BumperBody[],
 
   slingshots: [

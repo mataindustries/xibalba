@@ -296,20 +296,20 @@ export class PinballScene extends Phaser.Scene {
     const visualHeight = sensor.height * alignment.heightScale
     const visual = this.add.container(visualX, visualY).setDepth(4)
     const backing = this.add
-      .rectangle(0, 0, visualWidth + 14, visualHeight + 12, theme.ink, 0.5)
-      .setStrokeStyle(2, theme.goldShadow, 0.34)
+      .rectangle(0, 0, visualWidth + 16, visualHeight + 14, theme.ink, 0.66)
+      .setStrokeStyle(3, theme.goldShadow, 0.46)
       .setName('backing')
     const insert = this.add
-      .rectangle(0, 0, visualWidth, visualHeight, theme.obsidian, 0.82)
-      .setStrokeStyle(2, theme.agedGold, 0.7)
+      .rectangle(0, 0, visualWidth, visualHeight, theme.obsidian, 0.9)
+      .setStrokeStyle(3, theme.agedGold, 0.82)
       .setName('insert')
     const glow = this.add
-      .rectangle(0, 0, visualWidth + 8, visualHeight + 8, theme.jade, 0)
-      .setStrokeStyle(2, theme.brightJade, 0)
+      .rectangle(0, 0, visualWidth + 12, visualHeight + 12, theme.jade, 0)
+      .setStrokeStyle(3, theme.brightJade, 0)
       .setName('glow')
     const glyph = this.add
-      .triangle(0, 1, 0, -visualHeight * 0.22, visualWidth * 0.26, visualHeight * 0.2, -visualWidth * 0.26, visualHeight * 0.2, theme.jade, 0.22)
-      .setStrokeStyle(1, theme.goldShadow, 0.45)
+      .triangle(0, 2, 0, -visualHeight * 0.24, visualWidth * 0.28, visualHeight * 0.22, -visualWidth * 0.28, visualHeight * 0.22, theme.jade, 0.26)
+      .setStrokeStyle(2, theme.goldShadow, 0.5)
       .setName('glyph')
 
     visual.add([backing, glow, insert, glyph])
@@ -347,21 +347,31 @@ export class PinballScene extends Phaser.Scene {
     const radius = bumper.radius * alignment.scale
     const position = this.visualBumperPosition(bumper)
     const visual = this.add.container(position.x, position.y).setDepth(6)
-    const halo = this.add.circle(0, 0, radius * 1.18, theme.jade, 0.055).setStrokeStyle(2, theme.brightJade, 0.16)
-    const cover = this.add.circle(0, 0, radius * 1.05, theme.ink, 0.46).setStrokeStyle(3, theme.goldShadow, 0.32)
-    const outerRing = this.add.circle(0, 0, radius * 0.9, theme.goldShadow, 0.78).setStrokeStyle(5, theme.agedGold, 0.84)
-    const innerHousing = this.add.circle(0, 0, radius * 0.56, theme.obsidian, 0.9).setStrokeStyle(3, theme.goldShadow, 0.66)
-    const coreGlow = this.add.circle(0, 0, radius * 0.33, theme.jade, 0.32).setStrokeStyle(2, theme.brightJade, 0.62)
-    const core = this.add.circle(0, 0, radius * 0.18, theme.brightJade, 0.74)
-    const highlight = this.add.circle(-radius * 0.08, -radius * 0.1, radius * 0.055, theme.ivory, 0.36)
+    const halo = this.add.circle(0, 0, radius * 1.22, theme.jade, 0.08).setStrokeStyle(3, theme.brightJade, 0.18)
+    const hitGlow = this.add
+      .circle(0, 0, radius * 1.05, theme.ember, 0.34)
+      .setStrokeStyle(3, theme.brightJade, 0.42)
+      .setAlpha(0)
+      .setName('hitGlow')
+    const cover = this.add.circle(0, 0, radius * 1.08, theme.ink, 0.58).setStrokeStyle(4, theme.goldShadow, 0.4)
+    const outerRing = this.add.circle(0, 0, radius * 0.94, theme.goldShadow, 0.82).setStrokeStyle(7, theme.agedGold, 0.9)
+    const bevel = this.add.circle(0, 0, radius * 0.73, theme.agedGold, 0.18).setStrokeStyle(3, theme.goldShadow, 0.58)
+    const innerHousing = this.add.circle(0, 0, radius * 0.58, theme.obsidian, 0.94).setStrokeStyle(4, theme.goldShadow, 0.7)
+    const coreGlow = this.add
+      .circle(0, 0, radius * 0.39, theme.jade, 0.36)
+      .setStrokeStyle(3, theme.brightJade, 0.66)
+      .setName('coreGlow')
+    const core = this.add.circle(0, 0, radius * 0.22, theme.brightJade, 0.78)
+    const emberAccent = this.add.circle(0, 0, radius * 0.3, theme.ember, 0.1).setStrokeStyle(1, theme.ember, 0.3)
+    const highlight = this.add.circle(-radius * 0.1, -radius * 0.12, radius * 0.06, theme.ivory, 0.42)
 
-    visual.add([halo, cover, outerRing, innerHousing, coreGlow, core, highlight])
+    visual.add([halo, hitGlow, cover, outerRing, bevel, innerHousing, emberAccent, coreGlow, core, highlight])
 
     for (let index = 0; index < 8; index += 1) {
       const angle = (Math.PI * 2 * index) / 8
-      const x = Math.cos(angle) * radius * 0.78
-      const y = Math.sin(angle) * radius * 0.78
-      visual.add(this.add.circle(x, y, radius * 0.055, theme.agedGold, 0.82))
+      const x = Math.cos(angle) * radius * 0.82
+      const y = Math.sin(angle) * radius * 0.82
+      visual.add(this.add.circle(x, y, radius * 0.06, theme.agedGold, 0.86))
     }
 
     return visual
@@ -510,32 +520,32 @@ export class PinballScene extends Phaser.Scene {
 
   private createHud() {
     this.add
-      .rectangle(18, 18, 432, 112, theme.ink, 0.54)
+      .rectangle(18, 18, 452, 124, theme.ink, 0.6)
       .setOrigin(0)
-      .setStrokeStyle(2, theme.goldShadow, 0.42)
+      .setStrokeStyle(2, theme.goldShadow, 0.5)
       .setDepth(39)
 
     this.add
-      .rectangle(tableLayout.table.width - 448, 18, 430, 118, theme.ink, 0.54)
+      .rectangle(tableLayout.table.width - 478, 18, 460, 124, theme.ink, 0.6)
       .setOrigin(0)
-      .setStrokeStyle(2, theme.goldShadow, 0.42)
+      .setStrokeStyle(2, theme.goldShadow, 0.5)
       .setDepth(39)
 
     this.scoreText = this.add
       .text(24, 22, 'SCORE 0', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '26px',
-        color: theme.css.bone,
+        fontSize: '29px',
+        color: theme.css.ivory,
         stroke: theme.css.ink,
-        strokeThickness: 5,
+        strokeThickness: 6,
       })
       .setDepth(40)
 
     this.highScoreText = this.add
       .text(tableLayout.table.width - 24, 22, `HIGH ${this.highScore}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '22px',
-        color: theme.css.agedGold,
+        fontSize: '24px',
+        color: theme.css.bone,
         stroke: theme.css.ink,
         strokeThickness: 5,
       })
@@ -554,20 +564,20 @@ export class PinballScene extends Phaser.Scene {
       .setAlpha(0.72)
 
     this.ballStateText = this.add
-      .text(24, 82, 'BALL PLUNGER', {
+      .text(24, 84, 'BALL PLUNGER', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '13px',
+        fontSize: '15px',
         color: theme.css.agedGold,
         stroke: theme.css.ink,
-        strokeThickness: 3,
+        strokeThickness: 4,
       })
       .setDepth(40)
-      .setAlpha(0.88)
+      .setAlpha(0.96)
 
     this.ballSaveText = this.add
       .text(tableLayout.table.width - 24, 54, 'BALL SAVE', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '20px',
+        fontSize: '22px',
         color: theme.css.agedGold,
         stroke: theme.css.ink,
         strokeThickness: 5,
@@ -577,30 +587,30 @@ export class PinballScene extends Phaser.Scene {
       .setVisible(false)
 
     this.rolloverText = this.add
-      .text(24, 104, `ROLLOVERS 0/${this.rolloverCount()}`, {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '13px',
-        color: theme.css.brightJade,
-        stroke: theme.css.ink,
-        strokeThickness: 3,
-      })
-      .setDepth(40)
-      .setAlpha(0.9)
-
-    this.eclipseStateText = this.add
-      .text(tableLayout.table.width - 24, 82, 'STATE NORMAL', {
+      .text(24, 108, `ROLLOVERS 0/${this.rolloverCount()}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '15px',
         color: theme.css.bone,
         stroke: theme.css.ink,
-        strokeThickness: 3,
+        strokeThickness: 4,
+      })
+      .setDepth(40)
+      .setAlpha(0.96)
+
+    this.eclipseStateText = this.add
+      .text(tableLayout.table.width - 24, 84, 'STATE NORMAL', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '17px',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
+        strokeThickness: 4,
       })
       .setOrigin(1, 0)
       .setDepth(40)
-      .setAlpha(0.92)
+      .setAlpha(0.96)
 
     this.devModeText = this.add
-      .text(tableLayout.table.width - 24, 108, 'DEV MODE', {
+      .text(tableLayout.table.width - 24, 112, 'DEV MODE', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
         color: theme.css.ember,
@@ -957,7 +967,7 @@ export class PinballScene extends Phaser.Scene {
       this.addScore(points)
       this.showScorePopup(otherBody.position.x, otherBody.position.y - 28, 'BUMPER HIT', points)
       if (bumper) {
-        this.pulse(this.bumperVisuals.get(bumper.id), tableLayout.tuning.pulseScale + 0.1)
+        this.pulseBumperVisual(bumper)
         this.flashCircle(bumper.x, bumper.y, bumper.radius * 1.45, theme.ember)
       }
       this.kickBallAwayFrom(ball, otherBody.position, tableLayout.tuning.bumperForce)
@@ -2029,6 +2039,48 @@ export class PinballScene extends Phaser.Scene {
     })
   }
 
+  private pulseBumperVisual(bumper: BumperBody) {
+    const visual = this.bumperVisuals.get(bumper.id)
+    this.pulse(visual, tableLayout.tuning.pulseScale + 0.1)
+
+    const hitGlow = visual?.getByName('hitGlow') as Phaser.GameObjects.Arc | null
+    const coreGlow = visual?.getByName('coreGlow') as Phaser.GameObjects.Arc | null
+
+    if (hitGlow) {
+      this.tweens.killTweensOf(hitGlow)
+      hitGlow.setAlpha(0.68)
+      hitGlow.setScale(0.86)
+      this.tweens.add({
+        targets: hitGlow,
+        alpha: 0,
+        scaleX: 1.45,
+        scaleY: 1.45,
+        duration: tableLayout.tuning.pulseDurationMs * 1.65,
+        ease: 'Sine.easeOut',
+        onComplete: () => hitGlow.setScale(1),
+      })
+    }
+
+    if (coreGlow) {
+      this.tweens.killTweensOf(coreGlow)
+      coreGlow.setFillStyle(theme.brightJade, 0.62)
+      this.tweens.add({
+        targets: coreGlow,
+        alpha: 0.78,
+        scaleX: 1.22,
+        scaleY: 1.22,
+        duration: tableLayout.tuning.pulseDurationMs,
+        yoyo: true,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          coreGlow.setAlpha(1)
+          coreGlow.setScale(1)
+          coreGlow.setFillStyle(theme.jade, 0.36)
+        },
+      })
+    }
+  }
+
   private updateMultiballTrail() {
     if (this.eclipseState !== 'ECLIPSE MULTIBALL' || this.time.now - this.lastTrailAt < tableLayout.juice.trailIntervalMs) {
       return
@@ -2243,10 +2295,11 @@ export class PinballScene extends Phaser.Scene {
     const bumperAlignment = tableLayout.visualAlignment.bumpers
     tableLayout.bumpers.forEach((bumper) => {
       const position = this.visualBumperPosition(bumper)
-      graphics.fillStyle(theme.obsidian, 0.1)
-      graphics.fillCircle(position.x, position.y, bumper.radius * bumperAlignment.scale * 1.34)
-      graphics.lineStyle(2, theme.goldShadow, 0.12)
-      graphics.strokeCircle(position.x, position.y, bumper.radius * bumperAlignment.scale * 1.34)
+      const radius = bumper.radius * bumperAlignment.scale * 1.28
+      graphics.fillStyle(theme.obsidian, 0.12)
+      graphics.fillCircle(position.x, position.y, radius)
+      graphics.lineStyle(2, theme.goldShadow, 0.16)
+      graphics.strokeCircle(position.x, position.y, radius)
     })
 
     const rolloverAlignment = tableLayout.visualAlignment.rollovers
@@ -2254,10 +2307,16 @@ export class PinballScene extends Phaser.Scene {
     const minRolloverX = Math.min(...rolloverSensors.map((sensor) => sensor.x + rolloverAlignment.offsetX))
     const maxRolloverX = Math.max(...rolloverSensors.map((sensor) => sensor.x + rolloverAlignment.offsetX))
     const rolloverY = rolloverSensors[0]?.y ?? 760
+    const rolloverWidth = rolloverSensors[0]?.width ?? 54
+    const rolloverHeight = rolloverSensors[0]?.height ?? 78
+    const rowX = minRolloverX - rolloverWidth / 2 - 16
+    const rowY = rolloverY + rolloverAlignment.offsetY - rolloverHeight / 2 - 12
+    const rowWidth = maxRolloverX - minRolloverX + rolloverWidth + 32
+    const rowHeight = rolloverHeight + 24
     graphics.fillStyle(theme.obsidian, 0.12)
-    graphics.fillRoundedRect(minRolloverX - 24, rolloverY + rolloverAlignment.offsetY - 18, maxRolloverX - minRolloverX + 48, 36, 12)
-    graphics.lineStyle(1, theme.goldShadow, 0.1)
-    graphics.strokeRoundedRect(minRolloverX - 24, rolloverY + rolloverAlignment.offsetY - 18, maxRolloverX - minRolloverX + 48, 36, 12)
+    graphics.fillRoundedRect(rowX, rowY, rowWidth, rowHeight, 14)
+    graphics.lineStyle(1, theme.goldShadow, 0.14)
+    graphics.strokeRoundedRect(rowX, rowY, rowWidth, rowHeight, 14)
   }
 
   private drawDebugOverlay() {
