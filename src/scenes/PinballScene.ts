@@ -2297,6 +2297,7 @@ export class PinballScene extends Phaser.Scene {
     const graphics = this.playfieldGraphics
     graphics.clear()
     this.drawGuideRails(graphics)
+    this.drawRolloverGateHardware(graphics)
 
     const bumperAlignment = tableLayout.visualAlignment.bumpers
     tableLayout.bumpers.forEach((bumper) => {
@@ -2307,22 +2308,61 @@ export class PinballScene extends Phaser.Scene {
       graphics.lineStyle(2, theme.goldShadow, 0.16)
       graphics.strokeCircle(position.x, position.y, radius)
     })
+  }
 
-    const rolloverAlignment = tableLayout.visualAlignment.rollovers
+  private drawRolloverGateHardware(graphics: Phaser.GameObjects.Graphics) {
+    const hardware = tableLayout.rolloverGateHardware
+    const alignment = tableLayout.visualAlignment.rollovers
     const rolloverSensors = tableLayout.sensors.filter((sensor) => sensor.kind === 'rollover')
-    const minRolloverX = Math.min(...rolloverSensors.map((sensor) => sensor.x + rolloverAlignment.offsetX))
-    const maxRolloverX = Math.max(...rolloverSensors.map((sensor) => sensor.x + rolloverAlignment.offsetX))
-    const rolloverY = rolloverSensors[0]?.y ?? 760
-    const rolloverWidth = rolloverSensors[0]?.width ?? 54
-    const rolloverHeight = rolloverSensors[0]?.height ?? 78
-    const rowX = minRolloverX - rolloverWidth / 2 - 16
-    const rowY = rolloverY + rolloverAlignment.offsetY - rolloverHeight / 2 - 12
-    const rowWidth = maxRolloverX - minRolloverX + rolloverWidth + 32
-    const rowHeight = rolloverHeight + 24
-    graphics.fillStyle(theme.obsidian, 0.12)
-    graphics.fillRoundedRect(rowX, rowY, rowWidth, rowHeight, 14)
-    graphics.lineStyle(1, theme.goldShadow, 0.14)
-    graphics.strokeRoundedRect(rowX, rowY, rowWidth, rowHeight, 14)
+    if (rolloverSensors.length === 0) {
+      return
+    }
+
+    const centerIndex = (this.rolloverCount() + 1) / 2
+    const visualCenters = rolloverSensors.map((sensor) => {
+      const rolloverIndex = Number.parseInt(sensor.id.replace('rollover-', ''), 10)
+      const gapOffset = Number.isFinite(rolloverIndex) ? (rolloverIndex - centerIndex) * alignment.gapAdjust : 0
+      return sensor.x + alignment.offsetX + gapOffset
+    })
+    const visualY = rolloverSensors[0].y + alignment.offsetY
+    const visualWidth = rolloverSensors[0].width * alignment.widthScale
+    const leftEdge = Math.min(...visualCenters) - visualWidth / 2
+    const rightEdge = Math.max(...visualCenters) + visualWidth / 2
+    const topY = visualY + hardware.topOffsetY
+    const lowerY = visualY + hardware.lowerOffsetY
+    const leftTop = { x: leftEdge - hardware.sideOverhang, y: topY }
+    const rightTop = { x: rightEdge + hardware.sideOverhang, y: topY }
+    const leftLower = { x: leftEdge - 8, y: lowerY }
+    const rightLower = { x: rightEdge + 8, y: lowerY }
+
+    this.drawPremiumHardwareBar(graphics, leftTop, rightTop, hardware.railWidth, hardware.alpha, {
+      trimAlpha: hardware.alpha * 0.78,
+      jadeAlpha: hardware.jadeAlpha,
+      endCaps: true,
+      capRadius: hardware.postRadius,
+    })
+    this.drawPremiumHardwareBar(graphics, { x: leftTop.x + 8, y: topY + 4 }, leftLower, Math.max(7, hardware.railWidth * 0.58), hardware.alpha * 0.86, {
+      trimAlpha: hardware.alpha * 0.62,
+      jadeAlpha: hardware.jadeAlpha * 0.74,
+      endCaps: false,
+    })
+    this.drawPremiumHardwareBar(graphics, { x: rightTop.x - 8, y: topY + 4 }, rightLower, Math.max(7, hardware.railWidth * 0.58), hardware.alpha * 0.86, {
+      trimAlpha: hardware.alpha * 0.62,
+      jadeAlpha: hardware.jadeAlpha * 0.74,
+      endCaps: false,
+    })
+    this.drawPremiumHardwareBar(graphics, leftLower, rightLower, hardware.lipWidth, hardware.alpha * 0.8, {
+      trimAlpha: hardware.alpha * 0.64,
+      jadeAlpha: hardware.jadeAlpha * 0.42,
+      endCaps: false,
+    })
+
+    this.drawMetalPost(graphics, leftLower.x, leftLower.y, hardware.postRadius * 0.78, hardware.alpha * 0.92, true)
+    this.drawMetalPost(graphics, rightLower.x, rightLower.y, hardware.postRadius * 0.78, hardware.alpha * 0.92, true)
+    for (let index = 0; index < visualCenters.length - 1; index += 1) {
+      const dividerX = (visualCenters[index] + visualCenters[index + 1]) / 2
+      this.drawMetalPost(graphics, dividerX, lowerY + 6, hardware.postRadius * 0.54, hardware.alpha * 0.72, true)
+    }
   }
 
   private drawGuideRails(graphics: Phaser.GameObjects.Graphics) {
@@ -2369,6 +2409,18 @@ export class PinballScene extends Phaser.Scene {
     const trimAlpha = guide.trimAlpha ?? alpha * 0.78
     const trimWidth = Math.max(1.4, width * 0.12)
 
+    if (guide.style === 'deflector') {
+      this.drawPremiumHardwareBar(graphics, from, to, width, alpha, {
+        trimAlpha,
+        jadeAlpha: guide.jadeEdge ? alpha * 0.34 : alpha * 0.12,
+        endCaps: guide.endCaps ?? true,
+        rivetSpacing: guide.rivetSpacing,
+        rivetAlpha: guide.rivetAlpha,
+        capRadius: Math.max(5, width * 0.48),
+      })
+      return
+    }
+
     const line = (offset: number, color: number, lineWidth: number, lineAlpha: number) => {
       graphics.lineStyle(lineWidth, color, lineAlpha)
       graphics.lineBetween(
@@ -2410,6 +2462,94 @@ export class PinballScene extends Phaser.Scene {
       graphics.strokeCircle(from.x, from.y, capRadius)
       graphics.strokeCircle(to.x, to.y, capRadius)
     }
+  }
+
+  private drawPremiumHardwareBar(
+    graphics: Phaser.GameObjects.Graphics,
+    from: Point,
+    to: Point,
+    width: number,
+    alpha: number,
+    options: {
+      trimAlpha?: number
+      jadeAlpha?: number
+      endCaps?: boolean
+      rivetSpacing?: number
+      rivetAlpha?: number
+      capRadius?: number
+    } = {},
+  ) {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const length = Math.hypot(dx, dy)
+    if (length === 0) {
+      return
+    }
+
+    const ux = dx / length
+    const uy = dy / length
+    const nx = -uy
+    const ny = ux
+    const trimAlpha = options.trimAlpha ?? alpha * 0.78
+    const jadeAlpha = options.jadeAlpha ?? 0
+    const line = (offset: number, color: number, lineWidth: number, lineAlpha: number) => {
+      graphics.lineStyle(lineWidth, color, lineAlpha)
+      graphics.lineBetween(
+        from.x + nx * offset,
+        from.y + ny * offset,
+        to.x + nx * offset,
+        to.y + ny * offset,
+      )
+    }
+
+    graphics.lineStyle(width + 10, theme.ink, alpha * 0.3)
+    graphics.lineBetween(from.x + 2, from.y + 4, to.x + 2, to.y + 4)
+    line(0, theme.charcoal, width + 5, alpha * 0.7)
+    line(0, theme.obsidian, width, alpha)
+    line(-width * 0.34, theme.agedGold, Math.max(1.6, width * 0.13), trimAlpha)
+    line(width * 0.34, theme.goldShadow, Math.max(1.4, width * 0.11), trimAlpha * 0.78)
+    line(0, theme.ink, Math.max(1.2, width * 0.08), alpha * 0.28)
+
+    if (jadeAlpha > 0) {
+      line(0, theme.jade, Math.max(1.2, width * 0.06), jadeAlpha)
+    }
+
+    if (options.rivetSpacing && options.rivetSpacing > 0) {
+      for (let distance = options.rivetSpacing; distance < length; distance += options.rivetSpacing) {
+        const x = from.x + ux * distance
+        const y = from.y + uy * distance
+        const rivetAlpha = options.rivetAlpha ?? alpha * 0.5
+        graphics.fillStyle(theme.goldShadow, rivetAlpha)
+        graphics.fillCircle(x, y, Math.max(1.8, width * 0.11))
+        graphics.fillStyle(theme.agedGold, rivetAlpha * 0.56)
+        graphics.fillCircle(x - nx * width * 0.05, y - ny * width * 0.05, Math.max(0.9, width * 0.055))
+      }
+    }
+
+    if (options.endCaps) {
+      const capRadius = options.capRadius ?? Math.max(4, width * 0.46)
+      this.drawMetalPost(graphics, from.x, from.y, capRadius, alpha * 0.96, jadeAlpha > 0)
+      this.drawMetalPost(graphics, to.x, to.y, capRadius, alpha * 0.96, jadeAlpha > 0)
+    }
+  }
+
+  private drawMetalPost(graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, alpha: number, jadeCore = false) {
+    graphics.fillStyle(theme.ink, alpha * 0.42)
+    graphics.fillCircle(x + 2, y + 3, radius * 1.16)
+    graphics.fillStyle(theme.goldShadow, alpha * 0.78)
+    graphics.fillCircle(x, y, radius)
+    graphics.lineStyle(Math.max(1.4, radius * 0.22), theme.agedGold, alpha * 0.82)
+    graphics.strokeCircle(x, y, radius)
+    graphics.fillStyle(theme.obsidian, alpha * 0.92)
+    graphics.fillCircle(x, y, radius * 0.62)
+
+    if (jadeCore) {
+      graphics.fillStyle(theme.jade, alpha * 0.42)
+      graphics.fillCircle(x, y, radius * 0.34)
+    }
+
+    graphics.fillStyle(theme.ivory, alpha * 0.28)
+    graphics.fillCircle(x - radius * 0.22, y - radius * 0.28, Math.max(0.7, radius * 0.12))
   }
 
   private drawDebugOverlay() {

@@ -25,6 +25,7 @@ export type WallSegment = {
 export type GuideRailVisual = {
   id: string
   wallId: string
+  style?: 'rail' | 'deflector'
   width?: number
   alpha?: number
   startInset?: number
@@ -35,6 +36,18 @@ export type GuideRailVisual = {
   endCaps?: boolean
   rivetSpacing?: number
   rivetAlpha?: number
+}
+
+export type RolloverGateHardwareVisual = {
+  id: string
+  topOffsetY: number
+  lowerOffsetY: number
+  sideOverhang: number
+  railWidth: number
+  lipWidth: number
+  postRadius: number
+  alpha: number
+  jadeAlpha: number
 }
 
 export type RoundedPost = {
@@ -350,10 +363,56 @@ export const tableLayout = {
     { id: 'left-return-wall-rail', wallId: 'left-outer-wall', width: 16, alpha: 0.14, startInset: 220, endInset: 120, trimOffset: 11, trimAlpha: 0.12 },
     { id: 'right-return-wall-rail', wallId: 'right-outer-wall', width: 18, alpha: 0.2, startInset: 0, endInset: 90, trimOffset: 12, trimAlpha: 0.18 },
     { id: 'shooter-left-lane-rail', wallId: 'plunger-left-rail', width: 13, alpha: 0.24, startInset: 20, endInset: 120, trimOffset: 9, trimAlpha: 0.2, jadeEdge: true },
-    { id: 'left-ramp-mouth-upper-rail', wallId: 'left-ramp-mouth-upper', width: 11, alpha: 0.22, trimOffset: 8, trimAlpha: 0.18, endCaps: true },
-    { id: 'left-ramp-mouth-lower-rail', wallId: 'left-ramp-mouth-lower', width: 10, alpha: 0.2, trimOffset: 7, trimAlpha: 0.16 },
-    { id: 'right-ramp-mouth-upper-rail', wallId: 'right-ramp-mouth-upper', width: 11, alpha: 0.23, trimOffset: 8, trimAlpha: 0.19, endCaps: true },
-    { id: 'right-ramp-mouth-lower-rail', wallId: 'right-ramp-mouth-lower', width: 10, alpha: 0.2, trimOffset: 7, trimAlpha: 0.16 },
+    {
+      id: 'left-ramp-mouth-upper-rail',
+      wallId: 'left-ramp-mouth-upper',
+      style: 'deflector',
+      width: 18,
+      alpha: 0.46,
+      trimOffset: 9,
+      trimAlpha: 0.52,
+      jadeEdge: true,
+      endCaps: true,
+      rivetSpacing: 34,
+      rivetAlpha: 0.34,
+    },
+    {
+      id: 'left-ramp-mouth-lower-rail',
+      wallId: 'left-ramp-mouth-lower',
+      style: 'deflector',
+      width: 16,
+      alpha: 0.4,
+      trimOffset: 8,
+      trimAlpha: 0.44,
+      endCaps: true,
+      rivetSpacing: 40,
+      rivetAlpha: 0.3,
+    },
+    {
+      id: 'right-ramp-mouth-upper-rail',
+      wallId: 'right-ramp-mouth-upper',
+      style: 'deflector',
+      width: 18,
+      alpha: 0.46,
+      trimOffset: 9,
+      trimAlpha: 0.52,
+      jadeEdge: true,
+      endCaps: true,
+      rivetSpacing: 34,
+      rivetAlpha: 0.34,
+    },
+    {
+      id: 'right-ramp-mouth-lower-rail',
+      wallId: 'right-ramp-mouth-lower',
+      style: 'deflector',
+      width: 16,
+      alpha: 0.4,
+      trimOffset: 8,
+      trimAlpha: 0.44,
+      endCaps: true,
+      rivetSpacing: 40,
+      rivetAlpha: 0.3,
+    },
     { id: 'left-outlane-outer-rail', wallId: 'left-outlane-outer', width: 13, alpha: 0.18, startInset: 12, endInset: 16, trimOffset: 9, trimAlpha: 0.16 },
     { id: 'left-outlane-inner-rail', wallId: 'left-outlane-inner', width: 12, alpha: 0.2, startInset: 8, endInset: 10, trimOffset: 8, trimAlpha: 0.17, jadeEdge: true },
     { id: 'right-outlane-inner-rail', wallId: 'right-outlane-inner', width: 12, alpha: 0.2, startInset: 8, endInset: 10, trimOffset: 8, trimAlpha: 0.17, jadeEdge: true },
@@ -363,6 +422,18 @@ export const tableLayout = {
     { id: 'left-apron-guide-rail', wallId: 'left-apron', width: 18, alpha: 0.18, startInset: 12, endInset: 12, trimOffset: 12, trimAlpha: 0.16 },
     { id: 'right-apron-guide-rail', wallId: 'right-apron', width: 18, alpha: 0.18, startInset: 12, endInset: 12, trimOffset: 12, trimAlpha: 0.16 },
   ] satisfies GuideRailVisual[],
+
+  rolloverGateHardware: {
+    id: 'upper-rollover-gate-support',
+    topOffsetY: -76,
+    lowerOffsetY: -43,
+    sideOverhang: 38,
+    railWidth: 14,
+    lipWidth: 3,
+    postRadius: 8,
+    alpha: 0.34,
+    jadeAlpha: 0.16,
+  } satisfies RolloverGateHardwareVisual,
 
   // ROUNDED POSTS: reduce sharp-corner traps around slings, lane entrances, and ramp mouths.
   posts: [
