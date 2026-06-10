@@ -3,6 +3,7 @@ import { tableLayout } from '../config/tableLayout'
 import type {
   BumperBody,
   FlipperConfig,
+  GuideRailVisual,
   Point,
   RoundedPost,
   SensorBody,
@@ -278,11 +279,12 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private createJackpotVisual(sensor: SensorBody) {
-    // Runtime-only jackpot glow; static temple art comes from the playfield PNG.
+    // Debug-only jackpot helper; static temple art and score flashes carry normal gameplay.
     this.jackpotVisual = this.add
-      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.eclipseRed, 0.08)
-      .setStrokeStyle(4, theme.agedGold, 0.36)
-      .setDepth(3)
+      .rectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.ink, 0)
+      .setStrokeStyle(2, theme.goldShadow, 0.28)
+      .setDepth(29)
+      .setVisible(false)
     this.jackpotVisual.rotation = sensor.angle ?? 0
   }
 
@@ -1072,6 +1074,7 @@ export class PinballScene extends Phaser.Scene {
     if (this.devModeEnabled && Phaser.Input.Keyboard.JustDown(this.keys.debug)) {
       this.debugEnabled = !this.debugEnabled
       this.debugGraphics.setVisible(this.debugEnabled)
+      this.jackpotVisual?.setVisible(this.debugEnabled)
       if (!this.debugEnabled) {
         this.debugGraphics.clear()
       }
@@ -1140,6 +1143,7 @@ export class PinballScene extends Phaser.Scene {
       this.debugEnabled = false
       this.debugGraphics.setVisible(false)
       this.debugGraphics.clear()
+      this.jackpotVisual?.setVisible(false)
       this.setShotTestMode(false)
     }
   }
@@ -2292,6 +2296,8 @@ export class PinballScene extends Phaser.Scene {
   private drawRuntimeInsertUnderlays() {
     const graphics = this.playfieldGraphics
     graphics.clear()
+    this.drawGuideRails(graphics)
+
     const bumperAlignment = tableLayout.visualAlignment.bumpers
     tableLayout.bumpers.forEach((bumper) => {
       const position = this.visualBumperPosition(bumper)
@@ -2319,6 +2325,63 @@ export class PinballScene extends Phaser.Scene {
     graphics.strokeRoundedRect(rowX, rowY, rowWidth, rowHeight, 14)
   }
 
+  private drawGuideRails(graphics: Phaser.GameObjects.Graphics) {
+    tableLayout.guideRails.forEach((guide) => {
+      const segment = tableLayout.wallSegments.find((item) => item.id === guide.wallId)
+      if (!segment) {
+        return
+      }
+
+      this.drawGuideRail(graphics, segment, guide)
+    })
+  }
+
+  private drawGuideRail(graphics: Phaser.GameObjects.Graphics, segment: WallSegment, guide: GuideRailVisual) {
+    const dx = segment.to.x - segment.from.x
+    const dy = segment.to.y - segment.from.y
+    const length = Math.hypot(dx, dy)
+    if (length === 0) {
+      return
+    }
+
+    const nx = -dy / length
+    const ny = dx / length
+    const width = guide.width ?? Math.max(8, segment.thickness * 0.62)
+    const alpha = guide.alpha ?? 0.22
+    const trimOffset = guide.trimOffset ?? width * 0.62
+    const trimAlpha = guide.trimAlpha ?? alpha * 0.78
+    const trimWidth = Math.max(1.4, width * 0.12)
+
+    const line = (offset: number, color: number, lineWidth: number, lineAlpha: number) => {
+      graphics.lineStyle(lineWidth, color, lineAlpha)
+      graphics.lineBetween(
+        segment.from.x + nx * offset,
+        segment.from.y + ny * offset,
+        segment.to.x + nx * offset,
+        segment.to.y + ny * offset,
+      )
+    }
+
+    line(0, theme.ink, width + 6, alpha * 0.38)
+    line(0, theme.obsidian, width, alpha)
+    line(trimOffset, theme.agedGold, trimWidth, trimAlpha)
+    line(-trimOffset, theme.goldShadow, Math.max(1.2, trimWidth * 0.82), trimAlpha * 0.78)
+
+    if (guide.jadeEdge) {
+      line(trimOffset * 0.48, theme.jade, Math.max(1, trimWidth * 0.58), alpha * 0.34)
+    }
+
+    if (guide.endCaps) {
+      const capRadius = Math.max(4, width * 0.42)
+      graphics.fillStyle(theme.obsidian, alpha)
+      graphics.fillCircle(segment.from.x, segment.from.y, capRadius)
+      graphics.fillCircle(segment.to.x, segment.to.y, capRadius)
+      graphics.lineStyle(Math.max(1.5, trimWidth), theme.agedGold, trimAlpha)
+      graphics.strokeCircle(segment.from.x, segment.from.y, capRadius)
+      graphics.strokeCircle(segment.to.x, segment.to.y, capRadius)
+    }
+  }
+
   private drawDebugOverlay() {
     const graphics = this.debugGraphics
     graphics.clear()
@@ -2326,7 +2389,10 @@ export class PinballScene extends Phaser.Scene {
     this.collisionBodies.forEach((body) => {
       const isSensor = body.isSensor
       const isBall = Boolean(this.ballFromBody(body))
-      graphics.lineStyle(isSensor ? 2 : 3, isBall ? theme.ivory : isSensor ? theme.agedGold : theme.brightJade, isSensor ? 0.65 : 0.82)
+      const isJackpotSensor = body.label.startsWith('jackpot:')
+      const color = isBall ? theme.ivory : isJackpotSensor ? theme.goldShadow : isSensor ? theme.agedGold : theme.brightJade
+      const alpha = isJackpotSensor ? 0.38 : isSensor ? 0.65 : 0.82
+      graphics.lineStyle(isSensor ? 2 : 3, color, alpha)
 
       const parts = body.parts.length > 1 ? body.parts.slice(1) : [body]
       parts.forEach((part) => {

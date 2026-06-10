@@ -22,6 +22,17 @@ export type WallSegment = {
   restitution?: number
 }
 
+export type GuideRailVisual = {
+  id: string
+  wallId: string
+  width?: number
+  alpha?: number
+  trimOffset?: number
+  trimAlpha?: number
+  jadeEdge?: boolean
+  endCaps?: boolean
+}
+
 export type RoundedPost = {
   id: string
   kind: SegmentKind | 'post'
@@ -320,6 +331,27 @@ export const tableLayout = {
     { id: 'plunger-right-rail', kind: 'plungerLane', from: { x: 1062, y: 225 }, to: { x: 1062, y: 1845 }, thickness: 26 },
     { id: 'plunger-bottom-stop', kind: 'plungerLane', from: { x: 930, y: 1844 }, to: { x: 1060, y: 1844 }, thickness: 24 },
   ] satisfies WallSegment[],
+
+  // VISUAL GUIDE RAILS: draw-only counterparts for the less obvious collision guides.
+  // Each rail references a wall segment above so physics remains the source of truth.
+  guideRails: [
+    { id: 'upper-roof-rail', wallId: 'upper-left-roof-containment', width: 24, alpha: 0.2, trimOffset: 17, trimAlpha: 0.18 },
+    { id: 'upper-left-return-rail', wallId: 'upper-left-return-guide', width: 22, alpha: 0.24, trimOffset: 16, trimAlpha: 0.22, jadeEdge: true },
+    { id: 'top-left-arch-rail', wallId: 'top-left-arch', width: 17, alpha: 0.24, trimOffset: 13, trimAlpha: 0.2 },
+    { id: 'top-center-arch-rail', wallId: 'top-center-arch', width: 18, alpha: 0.18, trimOffset: 14, trimAlpha: 0.16 },
+    { id: 'top-right-arch-rail', wallId: 'top-right-arch', width: 17, alpha: 0.25, trimOffset: 13, trimAlpha: 0.22, jadeEdge: true },
+    { id: 'left-orbit-inner-rail', wallId: 'left-orbit-inner', width: 12, alpha: 0.3, trimOffset: 9, trimAlpha: 0.25, jadeEdge: true },
+    { id: 'right-orbit-inner-rail', wallId: 'right-orbit-inner', width: 12, alpha: 0.32, trimOffset: 9, trimAlpha: 0.28, jadeEdge: true },
+    { id: 'right-shooter-exit-rail', wallId: 'rightTrapFixGuide', width: 15, alpha: 0.32, trimOffset: 10, trimAlpha: 0.28, jadeEdge: true, endCaps: true },
+    { id: 'right-return-wall-rail', wallId: 'right-outer-wall', width: 18, alpha: 0.2, trimOffset: 12, trimAlpha: 0.18 },
+    { id: 'shooter-left-lane-rail', wallId: 'plunger-left-rail', width: 13, alpha: 0.24, trimOffset: 9, trimAlpha: 0.2, jadeEdge: true },
+    { id: 'left-outlane-outer-rail', wallId: 'left-outlane-outer', width: 13, alpha: 0.18, trimOffset: 9, trimAlpha: 0.16 },
+    { id: 'left-outlane-inner-rail', wallId: 'left-outlane-inner', width: 12, alpha: 0.2, trimOffset: 8, trimAlpha: 0.17 },
+    { id: 'right-outlane-inner-rail', wallId: 'right-outlane-inner', width: 12, alpha: 0.2, trimOffset: 8, trimAlpha: 0.17 },
+    { id: 'right-outlane-outer-rail', wallId: 'right-outlane-outer', width: 12, alpha: 0.18, trimOffset: 8, trimAlpha: 0.16 },
+    { id: 'left-apron-guide-rail', wallId: 'left-apron', width: 18, alpha: 0.18, trimOffset: 12, trimAlpha: 0.16 },
+    { id: 'right-apron-guide-rail', wallId: 'right-apron', width: 18, alpha: 0.18, trimOffset: 12, trimAlpha: 0.16 },
+  ] satisfies GuideRailVisual[],
 
   // ROUNDED POSTS: reduce sharp-corner traps around slings, lane entrances, and ramp mouths.
   posts: [
