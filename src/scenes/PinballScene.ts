@@ -2344,8 +2344,25 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
-    const nx = -dy / length
-    const ny = dx / length
+    const ux = dx / length
+    const uy = dy / length
+    const startInset = Math.max(0, guide.startInset ?? 0)
+    const endInset = Math.max(0, guide.endInset ?? 0)
+    const drawableLength = length - startInset - endInset
+    if (drawableLength <= 0) {
+      return
+    }
+
+    const from = {
+      x: segment.from.x + ux * startInset,
+      y: segment.from.y + uy * startInset,
+    }
+    const to = {
+      x: segment.to.x - ux * endInset,
+      y: segment.to.y - uy * endInset,
+    }
+    const nx = -uy
+    const ny = ux
     const width = guide.width ?? Math.max(8, segment.thickness * 0.62)
     const alpha = guide.alpha ?? 0.22
     const trimOffset = guide.trimOffset ?? width * 0.62
@@ -2355,15 +2372,17 @@ export class PinballScene extends Phaser.Scene {
     const line = (offset: number, color: number, lineWidth: number, lineAlpha: number) => {
       graphics.lineStyle(lineWidth, color, lineAlpha)
       graphics.lineBetween(
-        segment.from.x + nx * offset,
-        segment.from.y + ny * offset,
-        segment.to.x + nx * offset,
-        segment.to.y + ny * offset,
+        from.x + nx * offset,
+        from.y + ny * offset,
+        to.x + nx * offset,
+        to.y + ny * offset,
       )
     }
 
-    line(0, theme.ink, width + 6, alpha * 0.38)
+    line(0, theme.ink, width + 8, alpha * 0.42)
+    line(0, theme.charcoal, width + 2, alpha * 0.46)
     line(0, theme.obsidian, width, alpha)
+    line(0, theme.goldShadow, Math.max(1, width * 0.08), alpha * 0.12)
     line(trimOffset, theme.agedGold, trimWidth, trimAlpha)
     line(-trimOffset, theme.goldShadow, Math.max(1.2, trimWidth * 0.82), trimAlpha * 0.78)
 
@@ -2371,14 +2390,25 @@ export class PinballScene extends Phaser.Scene {
       line(trimOffset * 0.48, theme.jade, Math.max(1, trimWidth * 0.58), alpha * 0.34)
     }
 
+    if (guide.rivetSpacing && guide.rivetSpacing > 0) {
+      for (let distance = guide.rivetSpacing; distance < drawableLength; distance += guide.rivetSpacing) {
+        const x = from.x + ux * distance
+        const y = from.y + uy * distance
+        graphics.fillStyle(theme.goldShadow, guide.rivetAlpha ?? alpha * 0.52)
+        graphics.fillCircle(x, y, Math.max(1.6, width * 0.12))
+        graphics.fillStyle(theme.agedGold, (guide.rivetAlpha ?? alpha * 0.52) * 0.5)
+        graphics.fillCircle(x - nx * width * 0.04, y - ny * width * 0.04, Math.max(0.9, width * 0.06))
+      }
+    }
+
     if (guide.endCaps) {
       const capRadius = Math.max(4, width * 0.42)
       graphics.fillStyle(theme.obsidian, alpha)
-      graphics.fillCircle(segment.from.x, segment.from.y, capRadius)
-      graphics.fillCircle(segment.to.x, segment.to.y, capRadius)
+      graphics.fillCircle(from.x, from.y, capRadius)
+      graphics.fillCircle(to.x, to.y, capRadius)
       graphics.lineStyle(Math.max(1.5, trimWidth), theme.agedGold, trimAlpha)
-      graphics.strokeCircle(segment.from.x, segment.from.y, capRadius)
-      graphics.strokeCircle(segment.to.x, segment.to.y, capRadius)
+      graphics.strokeCircle(from.x, from.y, capRadius)
+      graphics.strokeCircle(to.x, to.y, capRadius)
     }
   }
 

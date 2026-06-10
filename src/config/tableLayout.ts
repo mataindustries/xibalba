@@ -27,10 +27,14 @@ export type GuideRailVisual = {
   wallId: string
   width?: number
   alpha?: number
+  startInset?: number
+  endInset?: number
   trimOffset?: number
   trimAlpha?: number
   jadeEdge?: boolean
   endCaps?: boolean
+  rivetSpacing?: number
+  rivetAlpha?: number
 }
 
 export type RoundedPost = {
@@ -335,22 +339,29 @@ export const tableLayout = {
   // VISUAL GUIDE RAILS: draw-only counterparts for the less obvious collision guides.
   // Each rail references a wall segment above so physics remains the source of truth.
   guideRails: [
-    { id: 'upper-roof-rail', wallId: 'upper-left-roof-containment', width: 24, alpha: 0.2, trimOffset: 17, trimAlpha: 0.18 },
-    { id: 'upper-left-return-rail', wallId: 'upper-left-return-guide', width: 22, alpha: 0.24, trimOffset: 16, trimAlpha: 0.22, jadeEdge: true },
-    { id: 'top-left-arch-rail', wallId: 'top-left-arch', width: 17, alpha: 0.24, trimOffset: 13, trimAlpha: 0.2 },
-    { id: 'top-center-arch-rail', wallId: 'top-center-arch', width: 18, alpha: 0.18, trimOffset: 14, trimAlpha: 0.16 },
-    { id: 'top-right-arch-rail', wallId: 'top-right-arch', width: 17, alpha: 0.25, trimOffset: 13, trimAlpha: 0.22, jadeEdge: true },
-    { id: 'left-orbit-inner-rail', wallId: 'left-orbit-inner', width: 12, alpha: 0.3, trimOffset: 9, trimAlpha: 0.25, jadeEdge: true },
-    { id: 'right-orbit-inner-rail', wallId: 'right-orbit-inner', width: 12, alpha: 0.32, trimOffset: 9, trimAlpha: 0.28, jadeEdge: true },
-    { id: 'right-shooter-exit-rail', wallId: 'rightTrapFixGuide', width: 15, alpha: 0.32, trimOffset: 10, trimAlpha: 0.28, jadeEdge: true, endCaps: true },
-    { id: 'right-return-wall-rail', wallId: 'right-outer-wall', width: 18, alpha: 0.2, trimOffset: 12, trimAlpha: 0.18 },
-    { id: 'shooter-left-lane-rail', wallId: 'plunger-left-rail', width: 13, alpha: 0.24, trimOffset: 9, trimAlpha: 0.2, jadeEdge: true },
-    { id: 'left-outlane-outer-rail', wallId: 'left-outlane-outer', width: 13, alpha: 0.18, trimOffset: 9, trimAlpha: 0.16 },
-    { id: 'left-outlane-inner-rail', wallId: 'left-outlane-inner', width: 12, alpha: 0.2, trimOffset: 8, trimAlpha: 0.17 },
-    { id: 'right-outlane-inner-rail', wallId: 'right-outlane-inner', width: 12, alpha: 0.2, trimOffset: 8, trimAlpha: 0.17 },
-    { id: 'right-outlane-outer-rail', wallId: 'right-outlane-outer', width: 12, alpha: 0.18, trimOffset: 8, trimAlpha: 0.16 },
-    { id: 'left-apron-guide-rail', wallId: 'left-apron', width: 18, alpha: 0.18, trimOffset: 12, trimAlpha: 0.16 },
-    { id: 'right-apron-guide-rail', wallId: 'right-apron', width: 18, alpha: 0.18, trimOffset: 12, trimAlpha: 0.16 },
+    { id: 'upper-roof-rail', wallId: 'upper-left-roof-containment', width: 24, alpha: 0.2, startInset: 24, endInset: 28, trimOffset: 17, trimAlpha: 0.18 },
+    { id: 'upper-left-return-rail', wallId: 'upper-left-return-guide', width: 22, alpha: 0.24, startInset: 10, endInset: 8, trimOffset: 16, trimAlpha: 0.22, jadeEdge: true },
+    { id: 'top-left-arch-rail', wallId: 'top-left-arch', width: 17, alpha: 0.24, startInset: 12, endInset: 12, trimOffset: 13, trimAlpha: 0.2 },
+    { id: 'top-center-arch-rail', wallId: 'top-center-arch', width: 18, alpha: 0.18, startInset: 20, endInset: 20, trimOffset: 14, trimAlpha: 0.16 },
+    { id: 'top-right-arch-rail', wallId: 'top-right-arch', width: 17, alpha: 0.25, startInset: 12, endInset: 10, trimOffset: 13, trimAlpha: 0.22, jadeEdge: true },
+    { id: 'left-orbit-inner-rail', wallId: 'left-orbit-inner', width: 12, alpha: 0.3, startInset: 8, endInset: 8, trimOffset: 9, trimAlpha: 0.25, jadeEdge: true },
+    { id: 'right-orbit-inner-rail', wallId: 'right-orbit-inner', width: 12, alpha: 0.32, startInset: 8, endInset: 8, trimOffset: 9, trimAlpha: 0.28, jadeEdge: true },
+    { id: 'right-shooter-exit-rail', wallId: 'rightTrapFixGuide', width: 15, alpha: 0.32, trimOffset: 10, trimAlpha: 0.28, jadeEdge: true, endCaps: true, rivetSpacing: 46, rivetAlpha: 0.22 },
+    { id: 'left-return-wall-rail', wallId: 'left-outer-wall', width: 16, alpha: 0.14, startInset: 220, endInset: 120, trimOffset: 11, trimAlpha: 0.12 },
+    { id: 'right-return-wall-rail', wallId: 'right-outer-wall', width: 18, alpha: 0.2, startInset: 0, endInset: 90, trimOffset: 12, trimAlpha: 0.18 },
+    { id: 'shooter-left-lane-rail', wallId: 'plunger-left-rail', width: 13, alpha: 0.24, startInset: 20, endInset: 120, trimOffset: 9, trimAlpha: 0.2, jadeEdge: true },
+    { id: 'left-ramp-mouth-upper-rail', wallId: 'left-ramp-mouth-upper', width: 11, alpha: 0.22, trimOffset: 8, trimAlpha: 0.18, endCaps: true },
+    { id: 'left-ramp-mouth-lower-rail', wallId: 'left-ramp-mouth-lower', width: 10, alpha: 0.2, trimOffset: 7, trimAlpha: 0.16 },
+    { id: 'right-ramp-mouth-upper-rail', wallId: 'right-ramp-mouth-upper', width: 11, alpha: 0.23, trimOffset: 8, trimAlpha: 0.19, endCaps: true },
+    { id: 'right-ramp-mouth-lower-rail', wallId: 'right-ramp-mouth-lower', width: 10, alpha: 0.2, trimOffset: 7, trimAlpha: 0.16 },
+    { id: 'left-outlane-outer-rail', wallId: 'left-outlane-outer', width: 13, alpha: 0.18, startInset: 12, endInset: 16, trimOffset: 9, trimAlpha: 0.16 },
+    { id: 'left-outlane-inner-rail', wallId: 'left-outlane-inner', width: 12, alpha: 0.2, startInset: 8, endInset: 10, trimOffset: 8, trimAlpha: 0.17, jadeEdge: true },
+    { id: 'right-outlane-inner-rail', wallId: 'right-outlane-inner', width: 12, alpha: 0.2, startInset: 8, endInset: 10, trimOffset: 8, trimAlpha: 0.17, jadeEdge: true },
+    { id: 'right-outlane-outer-rail', wallId: 'right-outlane-outer', width: 12, alpha: 0.18, startInset: 12, endInset: 14, trimOffset: 8, trimAlpha: 0.16 },
+    { id: 'left-inlane-guide-rail', wallId: 'left-inlane', width: 12, alpha: 0.16, startInset: 10, endInset: 10, trimOffset: 8, trimAlpha: 0.14 },
+    { id: 'right-inlane-guide-rail', wallId: 'right-inlane', width: 12, alpha: 0.16, startInset: 10, endInset: 10, trimOffset: 8, trimAlpha: 0.14 },
+    { id: 'left-apron-guide-rail', wallId: 'left-apron', width: 18, alpha: 0.18, startInset: 12, endInset: 12, trimOffset: 12, trimAlpha: 0.16 },
+    { id: 'right-apron-guide-rail', wallId: 'right-apron', width: 18, alpha: 0.18, startInset: 12, endInset: 12, trimOffset: 12, trimAlpha: 0.16 },
   ] satisfies GuideRailVisual[],
 
   // ROUNDED POSTS: reduce sharp-corner traps around slings, lane entrances, and ramp mouths.
