@@ -15,8 +15,8 @@ import type {
 type FlipperRuntime = {
   config: FlipperConfig
   body: MatterJS.BodyType
-  visual: Phaser.GameObjects.Rectangle
-  accent: Phaser.GameObjects.Rectangle
+  visual: Phaser.GameObjects.Container
+  accent: Phaser.GameObjects.Container
   currentAngle: number
   lastImpulseAt: number
   pressed: boolean
@@ -432,20 +432,104 @@ export class PinballScene extends Phaser.Scene {
 
     this.matter.body.setAngle(body, angle)
 
-    const visual = this.add
-      .rectangle(center.x, center.y, config.length, config.width, theme.goldShadow, 0.95)
-      .setStrokeStyle(4, theme.agedGold, 0.9)
-      .setDepth(7)
-    visual.rotation = angle
-    const accent = this.add
-      .rectangle(center.x, center.y, config.length * 0.68, config.width * 0.42, config.id === 'left' ? theme.jade : theme.eclipseRed, 0.72)
-      .setStrokeStyle(2, config.id === 'left' ? theme.brightJade : theme.ember, 0.64)
-      .setDepth(7.1)
-    accent.rotation = angle
+    const visual = this.createFlipperHardwareVisual(config, center, angle)
+    const accent = this.createFlipperAccentVisual(config, center, angle)
 
     this.flippers.push({ config, body, visual, accent, currentAngle: angle, lastImpulseAt: 0, pressed: false })
     this.collisionBodies.push(body)
     return body
+  }
+
+  private createFlipperHardwareVisual(config: FlipperConfig, center: Point, angle: number) {
+    const length = config.length
+    const width = config.width
+    const pivotRadius = width * 0.74
+    const tipRadius = width * 0.46
+    const pivotX = -length / 2 + pivotRadius
+    const tipX = length / 2 - tipRadius
+    const bodyLength = tipX - pivotX
+    const bodyCenterX = (pivotX + tipX) / 2
+    const visual = this.add.container(center.x, center.y).setDepth(7)
+
+    const shadowOffsetX = 2
+    const shadowOffsetY = 4
+    const shadow = [
+      this.add.rectangle(bodyCenterX + shadowOffsetX, shadowOffsetY, bodyLength, width + 10, theme.ink, 0.46),
+      this.add.circle(pivotX + shadowOffsetX, shadowOffsetY, pivotRadius + 5, theme.ink, 0.46),
+      this.add.circle(tipX + shadowOffsetX, shadowOffsetY, tipRadius + 5, theme.ink, 0.46),
+    ]
+
+    const goldShell = [
+      this.add.rectangle(bodyCenterX, 0, bodyLength, width + 7, theme.goldShadow, 0.96),
+      this.add.circle(pivotX, 0, pivotRadius + 3.5, theme.goldShadow, 0.96),
+      this.add.circle(tipX, 0, tipRadius + 3.5, theme.goldShadow, 0.96),
+    ]
+
+    const obsidianBody = [
+      this.add
+        .rectangle(bodyCenterX, 0, bodyLength, width, theme.obsidian, 0.99)
+        .setStrokeStyle(2, theme.agedGold, 0.58),
+      this.add
+        .circle(pivotX, 0, pivotRadius, theme.obsidian, 0.99)
+        .setStrokeStyle(3, theme.agedGold, 0.86),
+      this.add
+        .circle(tipX, 0, tipRadius, theme.obsidian, 0.99)
+        .setStrokeStyle(2, theme.agedGold, 0.76),
+    ]
+
+    const bevels = [
+      this.add.rectangle(bodyCenterX, -width * 0.36, bodyLength * 0.88, 3, theme.agedGold, 0.54),
+      this.add.rectangle(bodyCenterX, width * 0.37, bodyLength * 0.82, 2, theme.goldShadow, 0.56),
+      this.add.circle(pivotX - pivotRadius * 0.18, -pivotRadius * 0.2, pivotRadius * 0.18, theme.ivory, 0.18),
+    ]
+
+    const pivotCap = [
+      this.add.circle(pivotX, 0, pivotRadius * 0.68, theme.goldShadow, 0.92).setStrokeStyle(3, theme.agedGold, 0.9),
+      this.add.circle(pivotX, 0, pivotRadius * 0.43, theme.charcoal, 0.98).setStrokeStyle(2, theme.goldShadow, 0.7),
+      this.add.circle(pivotX, 0, pivotRadius * 0.18, theme.jade, 0.68).setStrokeStyle(1, theme.brightJade, 0.5),
+    ]
+
+    visual.add([...shadow, ...goldShell, ...obsidianBody, ...bevels, ...pivotCap])
+    visual.rotation = angle
+    return visual
+  }
+
+  private createFlipperAccentVisual(config: FlipperConfig, center: Point, angle: number) {
+    const length = config.length
+    const width = config.width
+    const pivotRadius = width * 0.74
+    const tipRadius = width * 0.46
+    const pivotX = -length / 2 + pivotRadius
+    const tipX = length / 2 - tipRadius
+    const accent = this.add.container(center.x, center.y).setDepth(7.2)
+    const inlayLength = length * 0.48
+    const inlayX = pivotX + pivotRadius + inlayLength * 0.46
+
+    const inlay = this.add
+      .rectangle(inlayX, 0, inlayLength, Math.max(5, width * 0.18), theme.jade, 0.58)
+      .setStrokeStyle(1, theme.brightJade, 0.55)
+    const inlayGlow = this.add.rectangle(inlayX, 0, inlayLength * 0.82, Math.max(2, width * 0.08), theme.brightJade, 0.28)
+    const centerRune = this.add
+      .triangle(inlayX, 0, 0, -width * 0.18, width * 0.18, width * 0.14, -width * 0.18, width * 0.14, theme.agedGold, 0.66)
+      .setStrokeStyle(1, theme.goldShadow, 0.5)
+    const runeTicks = [
+      this.add.rectangle(inlayX - inlayLength * 0.28, 0, 3, width * 0.32, theme.agedGold, 0.62),
+      this.add.rectangle(inlayX + inlayLength * 0.28, 0, 3, width * 0.32, theme.agedGold, 0.62),
+      this.add.circle(inlayX - inlayLength * 0.12, 0, 2.2, theme.brightJade, 0.52),
+      this.add.circle(inlayX + inlayLength * 0.12, 0, 2.2, theme.brightJade, 0.52),
+    ]
+    const tipInsert = this.add
+      .circle(tipX, 0, tipRadius * 0.54, theme.eclipseRed, 0.68)
+      .setStrokeStyle(2, theme.ember, 0.76)
+    const tipSpark = this.add.circle(tipX + tipRadius * 0.14, -tipRadius * 0.16, tipRadius * 0.2, theme.ember, 0.66)
+    const goldPins = [
+      this.add.circle(pivotX + pivotRadius * 1.12, -width * 0.34, 2.6, theme.agedGold, 0.8),
+      this.add.circle(tipX - tipRadius * 1.18, width * 0.34, 2.4, theme.agedGold, 0.78),
+    ]
+
+    accent.add([inlay, inlayGlow, centerRune, ...runeTicks, tipInsert, tipSpark, ...goldPins])
+    accent.rotation = angle
+    return accent
   }
 
   private spawnBall(position: Point, velocity: Point): BallRuntime {
