@@ -55,6 +55,7 @@ type ControlKeys = {
 
 type ComboHitKind = 'bumper' | 'sling' | 'targetOrLane'
 type EclipseState = 'NORMAL' | 'ECLIPSE READY' | 'ECLIPSE MULTIBALL'
+type BallState = 'IN PLAY' | 'PLUNGER' | 'DRAINED' | 'GAME OVER'
 type SoundCue = keyof typeof tableLayout.juice.sounds
 
 type ShotTestPlacement = 'leftFlipper' | 'rightFlipper' | 'centerLower' | 'shooterExit' | 'upperRollovers'
@@ -125,6 +126,7 @@ export class PinballScene extends Phaser.Scene {
   private visualAlignmentText!: Phaser.GameObjects.Text
   private shotTestText!: Phaser.GameObjects.Text
   private startOverlay!: Phaser.GameObjects.Container
+  private gameOverOverlay!: Phaser.GameObjects.Container
   private pauseOverlay!: Phaser.GameObjects.Container
   private touchHintLeft!: Phaser.GameObjects.Text
   private touchHintRight!: Phaser.GameObjects.Text
@@ -137,7 +139,8 @@ export class PinballScene extends Phaser.Scene {
   private jackpotVisual?: Phaser.GameObjects.Rectangle
   private pointerControls = new Map<number, 'left' | 'right' | 'plunger'>()
   private score = 0
-  private ballState: 'IN PLAY' | 'PLUNGER' | 'DRAINED' = 'PLUNGER'
+  private currentBall = 1
+  private ballState: BallState = 'PLUNGER'
   private plungerCharge = 0
   private plungerHeld = false
   private lastKeyboardPlunger = false
@@ -150,6 +153,7 @@ export class PinballScene extends Phaser.Scene {
   private lastComboAt = 0
   private lastLaneComboAt = 0
   private hasStarted = false
+  private gameOver = false
   private gamePaused = false
   private devModeEnabled = false
   private debugEnabled = false
@@ -199,6 +203,7 @@ export class PinballScene extends Phaser.Scene {
     this.createTouchHints()
     this.createStartOverlay()
     this.createPauseOverlay()
+    this.createGameOverOverlay()
     this.bindInput()
     this.bindCollisions()
     this.drawRuntimeInsertUnderlays()
@@ -524,13 +529,13 @@ export class PinballScene extends Phaser.Scene {
     this.add
       .rectangle(18, 18, 452, 124, theme.ink, 0.6)
       .setOrigin(0)
-      .setStrokeStyle(2, theme.goldShadow, 0.5)
+      .setStrokeStyle(2, theme.agedGold, 0.56)
       .setDepth(39)
 
     this.add
       .rectangle(tableLayout.table.width - 478, 18, 460, 124, theme.ink, 0.6)
       .setOrigin(0)
-      .setStrokeStyle(2, theme.goldShadow, 0.5)
+      .setStrokeStyle(2, theme.agedGold, 0.56)
       .setDepth(39)
 
     this.scoreText = this.add
@@ -566,15 +571,15 @@ export class PinballScene extends Phaser.Scene {
       .setAlpha(0.72)
 
     this.ballStateText = this.add
-      .text(24, 84, 'BALL PLUNGER', {
+      .text(24, 84, this.ballHudLabel(), {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '15px',
+        fontSize: '17px',
         color: theme.css.agedGold,
         stroke: theme.css.ink,
-        strokeThickness: 4,
+        strokeThickness: 5,
       })
       .setDepth(40)
-      .setAlpha(0.96)
+      .setAlpha(1)
 
     this.ballSaveText = this.add
       .text(tableLayout.table.width - 24, 54, 'BALL SAVE', {
@@ -766,6 +771,69 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(81)
 
     this.pauseOverlay = this.add.container(0, 0, [scrim, label]).setDepth(80).setVisible(false)
+  }
+
+  private createGameOverOverlay() {
+    const scrim = this.add
+      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, theme.obsidian, 0.66)
+      .setDepth(84)
+
+    const plate = this.add
+      .rectangle(tableLayout.table.width / 2, 1020, 720, 420, theme.ink, 0.76)
+      .setStrokeStyle(4, theme.agedGold, 0.64)
+      .setDepth(85)
+
+    const label = this.add
+      .text(tableLayout.table.width / 2, 900, 'GAME OVER', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '54px',
+        color: theme.css.ivory,
+        stroke: theme.css.ink,
+        strokeThickness: 8,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(86)
+
+    const finalScore = this.add
+      .text(tableLayout.table.width / 2, 994, 'FINAL SCORE 0', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '28px',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
+        strokeThickness: 5,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setName('gameOverFinalScore')
+      .setDepth(86)
+
+    const highScore = this.add
+      .text(tableLayout.table.width / 2, 1054, `HIGH SCORE ${this.highScore}`, {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '24px',
+        color: theme.css.brightJade,
+        stroke: theme.css.ink,
+        strokeThickness: 5,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setName('gameOverHighScore')
+      .setDepth(86)
+
+    const prompt = this.add
+      .text(tableLayout.table.width / 2, 1160, 'Tap / Press Space to Restart', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '27px',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
+        strokeThickness: 5,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(86)
+
+    this.gameOverOverlay = this.add.container(0, 0, [scrim, plate, label, finalScore, highScore, prompt]).setDepth(84).setVisible(false)
   }
 
   private bindInput() {
@@ -1102,12 +1170,17 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private startGame() {
+    if (this.gameOver) {
+      this.resetGameState()
+    }
+
     if (this.hasStarted) {
       return
     }
 
     this.hasStarted = true
     this.startOverlay.setVisible(false)
+    this.gameOverOverlay.setVisible(false)
     this.setGameplayFrozen(false)
     this.unlockAudio()
   }
@@ -1150,29 +1223,37 @@ export class PinballScene extends Phaser.Scene {
 
   private resetGameState() {
     this.score = 0
+    this.currentBall = 1
+    this.gameOver = false
     this.lastScoreEvent = 'none'
-    this.updateHud()
+    this.gameOverOverlay?.setVisible(false)
+    this.startOverlay?.setVisible(false)
     this.resetBall()
     if (this.gamePaused) {
       this.setPaused(false)
     }
+    this.updateHud()
   }
 
   private updateHud() {
     this.scoreText?.setText(`SCORE ${this.score}`)
     this.highScoreText?.setText(`HIGH ${this.highScore}`)
-    this.ballStateText?.setText(`BALL ${this.ballState}`)
+    this.ballStateText?.setText(this.ballHudLabel())
     this.rolloverText?.setText(`ROLLOVERS ${this.litRollovers.size}/${this.rolloverCount()}`)
     this.eclipseStateText?.setText(`STATE ${this.currentModeState()}`)
     this.eclipseStateText?.setColor(this.currentModeColor())
-    this.ballSaveText?.setVisible(this.isBallSaverActive())
+    this.ballSaveText?.setVisible(this.isBallSaverActive() && !this.gameOver)
     this.devModeText?.setVisible(this.devModeEnabled)
     this.visualAlignmentText?.setText(this.visualAlignmentSummary())
     this.visualAlignmentText?.setVisible(this.devModeEnabled)
-    this.controlsText?.setVisible(this.hasStarted)
-    this.touchHintLeft?.setVisible(this.hasStarted && !this.gamePaused)
-    this.touchHintRight?.setVisible(this.hasStarted && !this.gamePaused)
-    this.touchHintLaunch?.setVisible(this.hasStarted && !this.gamePaused)
+    this.controlsText?.setVisible(this.hasStarted && !this.gameOver)
+    this.touchHintLeft?.setVisible(this.hasStarted && !this.gamePaused && !this.gameOver)
+    this.touchHintRight?.setVisible(this.hasStarted && !this.gamePaused && !this.gameOver)
+    this.touchHintLaunch?.setVisible(this.hasStarted && !this.gamePaused && !this.gameOver)
+  }
+
+  private ballHudLabel() {
+    return `BALL ${this.currentBall}/${tableLayout.game.ballsPerGame}  ${this.ballState}`
   }
 
   private visualAlignmentSummary() {
@@ -1188,6 +1269,10 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private currentModeState() {
+    if (this.gameOver) {
+      return 'GAME OVER'
+    }
+
     if (this.isBallSaverActive() && this.eclipseState !== 'ECLIPSE MULTIBALL') {
       return 'BALL SAVE'
     }
@@ -1196,6 +1281,10 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private currentModeColor() {
+    if (this.gameOver) {
+      return theme.css.agedGold
+    }
+
     if (this.eclipseState === 'ECLIPSE MULTIBALL') {
       return theme.css.ember
     }
@@ -1482,6 +1571,39 @@ export class PinballScene extends Phaser.Scene {
     this.setBallState('PLUNGER')
   }
 
+  private serveNextBallOrEndGame() {
+    this.drainResetPending = false
+    if (this.currentBall >= tableLayout.game.ballsPerGame) {
+      this.endGame()
+      return
+    }
+
+    this.currentBall += 1
+    this.resetBall()
+  }
+
+  private endGame() {
+    this.releaseAllPointerControls()
+    this.clearAllBalls()
+    this.plungerHeld = false
+    this.plungerCharge = 0
+    this.drainResetPending = false
+    this.gamePaused = false
+    this.gameOver = true
+    this.hasStarted = false
+    this.clearBallSaver()
+    this.ballSaverArmed = false
+    this.setEclipseState('NORMAL')
+    this.resetRollovers()
+    this.setBallState('GAME OVER')
+    this.setGameplayFrozen(true)
+    this.pauseOverlay?.setVisible(false)
+    this.startOverlay?.setVisible(false)
+    this.updateGameOverOverlay()
+    this.gameOverOverlay.setVisible(true)
+    this.updateHud()
+  }
+
   private ensureSingleBall() {
     let ball = this.primaryBall()
     if (!ball) {
@@ -1537,7 +1659,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private updateBallState() {
-    if (this.ballState === 'DRAINED') {
+    if (this.ballState === 'DRAINED' || this.gameOver) {
       return
     }
 
@@ -1549,17 +1671,17 @@ export class PinballScene extends Phaser.Scene {
     this.setBallState(this.balls.every((ball) => this.isBallInPlungerLane(ball)) ? 'PLUNGER' : 'IN PLAY')
   }
 
-  private setBallState(state: 'IN PLAY' | 'PLUNGER' | 'DRAINED') {
+  private setBallState(state: BallState) {
     if (this.ballState === state) {
       return
     }
 
     this.ballState = state
-    this.ballStateText?.setText(`BALL ${state}`)
+    this.ballStateText?.setText(this.ballHudLabel())
   }
 
   private updateAntiStuck() {
-    if (this.ballState === 'DRAINED') {
+    if (this.ballState === 'DRAINED' || this.gameOver) {
       return
     }
 
@@ -1589,7 +1711,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private updateTrapKickers() {
-    if (this.ballState === 'DRAINED') {
+    if (this.ballState === 'DRAINED' || this.gameOver) {
       return
     }
 
@@ -1700,7 +1822,7 @@ export class PinballScene extends Phaser.Scene {
     if (this.balls.length === 0 && !this.drainResetPending) {
       this.drainResetPending = true
       this.setBallState('DRAINED')
-      this.time.delayedCall(260, () => this.resetBall())
+      this.time.delayedCall(260, () => this.serveNextBallOrEndGame())
       return
     }
 
@@ -1977,6 +2099,14 @@ export class PinballScene extends Phaser.Scene {
 
   private updateStartHighScore() {
     const highScoreText = this.startOverlay?.getByName('startHighScore') as Phaser.GameObjects.Text | null
+    highScoreText?.setText(`HIGH SCORE ${this.highScore}`)
+  }
+
+  private updateGameOverOverlay() {
+    this.updateStartHighScore()
+    const finalScoreText = this.gameOverOverlay?.getByName('gameOverFinalScore') as Phaser.GameObjects.Text | null
+    const highScoreText = this.gameOverOverlay?.getByName('gameOverHighScore') as Phaser.GameObjects.Text | null
+    finalScoreText?.setText(`FINAL SCORE ${this.score}`)
     highScoreText?.setText(`HIGH SCORE ${this.highScore}`)
   }
 
@@ -2277,7 +2407,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private stuckTimerMs(ball = this.primaryBall()) {
-    if (!ball || this.ballState === 'DRAINED' || this.isBallInPlungerLane(ball)) {
+    if (!ball || this.ballState === 'DRAINED' || this.gameOver || this.isBallInPlungerLane(ball)) {
       return 0
     }
 
@@ -2334,6 +2464,15 @@ export class PinballScene extends Phaser.Scene {
     const rightTop = { x: rightEdge + hardware.sideOverhang, y: topY }
     const leftLower = { x: leftEdge - 8, y: lowerY }
     const rightLower = { x: rightEdge + 8, y: lowerY }
+    const backingX = leftTop.x - hardware.postRadius
+    const backingY = topY - hardware.railWidth * 0.72
+    const backingWidth = rightTop.x - leftTop.x + hardware.postRadius * 2
+    const backingHeight = lowerY - topY + hardware.bracketDrop + hardware.railWidth * 0.98
+
+    graphics.fillStyle(theme.ink, hardware.backingAlpha)
+    graphics.fillRoundedRect(backingX, backingY, backingWidth, backingHeight, 9)
+    graphics.lineStyle(1, theme.goldShadow, hardware.alpha * 0.22)
+    graphics.strokeRoundedRect(backingX, backingY, backingWidth, backingHeight, 9)
 
     this.drawPremiumHardwareBar(graphics, leftTop, rightTop, hardware.railWidth, hardware.alpha, {
       trimAlpha: hardware.alpha * 0.78,
@@ -2357,11 +2496,26 @@ export class PinballScene extends Phaser.Scene {
       endCaps: false,
     })
 
+    visualCenters.forEach((centerX) => {
+      this.drawPremiumHardwareBar(
+        graphics,
+        { x: centerX, y: lowerY - hardware.bracketDrop * 0.42 },
+        { x: centerX, y: lowerY + hardware.bracketDrop },
+        hardware.bracketWidth,
+        hardware.alpha * 0.72,
+        {
+          trimAlpha: hardware.alpha * 0.5,
+          jadeAlpha: hardware.jadeAlpha * 0.36,
+          endCaps: false,
+        },
+      )
+    })
+
     this.drawMetalPost(graphics, leftLower.x, leftLower.y, hardware.postRadius * 0.78, hardware.alpha * 0.92, true)
     this.drawMetalPost(graphics, rightLower.x, rightLower.y, hardware.postRadius * 0.78, hardware.alpha * 0.92, true)
     for (let index = 0; index < visualCenters.length - 1; index += 1) {
       const dividerX = (visualCenters[index] + visualCenters[index + 1]) / 2
-      this.drawMetalPost(graphics, dividerX, lowerY + 6, hardware.postRadius * 0.54, hardware.alpha * 0.72, true)
+      this.drawMetalPost(graphics, dividerX, lowerY + hardware.bracketDrop * 0.26, hardware.postRadius * 0.62, hardware.alpha * 0.82, true)
     }
   }
 

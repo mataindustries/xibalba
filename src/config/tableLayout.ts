@@ -45,9 +45,12 @@ export type RolloverGateHardwareVisual = {
   sideOverhang: number
   railWidth: number
   lipWidth: number
+  bracketWidth: number
+  bracketDrop: number
   postRadius: number
   alpha: number
   jadeAlpha: number
+  backingAlpha: number
 }
 
 export type RoundedPost = {
@@ -138,6 +141,10 @@ export const tableLayout = {
 
   physics: {
     solverIterations: 12,
+  },
+
+  game: {
+    ballsPerGame: 5,
   },
 
   // TUNING: core table feel. Gravity and friction control table speed and ball slowdown.
@@ -368,50 +375,50 @@ export const tableLayout = {
       wallId: 'left-ramp-mouth-upper',
       style: 'deflector',
       width: 18,
-      alpha: 0.46,
+      alpha: 0.56,
       trimOffset: 9,
-      trimAlpha: 0.52,
+      trimAlpha: 0.64,
       jadeEdge: true,
       endCaps: true,
       rivetSpacing: 34,
-      rivetAlpha: 0.34,
+      rivetAlpha: 0.44,
     },
     {
       id: 'left-ramp-mouth-lower-rail',
       wallId: 'left-ramp-mouth-lower',
       style: 'deflector',
       width: 16,
-      alpha: 0.4,
+      alpha: 0.5,
       trimOffset: 8,
-      trimAlpha: 0.44,
+      trimAlpha: 0.56,
       endCaps: true,
       rivetSpacing: 40,
-      rivetAlpha: 0.3,
+      rivetAlpha: 0.38,
     },
     {
       id: 'right-ramp-mouth-upper-rail',
       wallId: 'right-ramp-mouth-upper',
       style: 'deflector',
       width: 18,
-      alpha: 0.46,
+      alpha: 0.56,
       trimOffset: 9,
-      trimAlpha: 0.52,
+      trimAlpha: 0.64,
       jadeEdge: true,
       endCaps: true,
       rivetSpacing: 34,
-      rivetAlpha: 0.34,
+      rivetAlpha: 0.44,
     },
     {
       id: 'right-ramp-mouth-lower-rail',
       wallId: 'right-ramp-mouth-lower',
       style: 'deflector',
       width: 16,
-      alpha: 0.4,
+      alpha: 0.5,
       trimOffset: 8,
-      trimAlpha: 0.44,
+      trimAlpha: 0.56,
       endCaps: true,
       rivetSpacing: 40,
-      rivetAlpha: 0.3,
+      rivetAlpha: 0.38,
     },
     { id: 'left-outlane-outer-rail', wallId: 'left-outlane-outer', width: 13, alpha: 0.18, startInset: 12, endInset: 16, trimOffset: 9, trimAlpha: 0.16 },
     { id: 'left-outlane-inner-rail', wallId: 'left-outlane-inner', width: 12, alpha: 0.2, startInset: 8, endInset: 10, trimOffset: 8, trimAlpha: 0.17, jadeEdge: true },
@@ -425,14 +432,17 @@ export const tableLayout = {
 
   rolloverGateHardware: {
     id: 'upper-rollover-gate-support',
-    topOffsetY: -76,
-    lowerOffsetY: -43,
-    sideOverhang: 38,
-    railWidth: 14,
-    lipWidth: 3,
-    postRadius: 8,
-    alpha: 0.34,
-    jadeAlpha: 0.16,
+    topOffsetY: -86,
+    lowerOffsetY: -40,
+    sideOverhang: 44,
+    railWidth: 16,
+    lipWidth: 4,
+    bracketWidth: 7,
+    bracketDrop: 26,
+    postRadius: 9,
+    alpha: 0.48,
+    jadeAlpha: 0.18,
+    backingAlpha: 0.16,
   } satisfies RolloverGateHardwareVisual,
 
   // ROUNDED POSTS: reduce sharp-corner traps around slings, lane entrances, and ramp mouths.
