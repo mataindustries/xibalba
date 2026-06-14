@@ -560,13 +560,39 @@ export class PinballScene extends Phaser.Scene {
     }
 
     const radius = tableLayout.ball.radius
+    const visual = tableLayout.ball.visual
+    const edgeAlpha = Phaser.Math.Clamp(visual.edgeShadeStrength, 0, 1)
+    const highlightAlpha = Phaser.Math.Clamp(visual.highlightStrength, 0, 1)
     const graphics = this.make.graphics({ x: 0, y: 0 }, false)
-    graphics.fillStyle(theme.ivory, 1)
+
+    graphics.fillStyle(0x07080a, 1)
     graphics.fillCircle(radius, radius, radius)
-    graphics.fillStyle(0xffffff, 0.42)
-    graphics.fillCircle(radius - 5, radius - 6, radius * 0.38)
-    graphics.lineStyle(4, theme.agedGold, 1)
-    graphics.strokeCircle(radius, radius, radius - 2)
+
+    graphics.fillStyle(0x2b3036, edgeAlpha)
+    graphics.fillCircle(radius, radius, radius * 0.94)
+    graphics.fillStyle(0x66717c, 1)
+    graphics.fillCircle(radius - radius * 0.05, radius - radius * 0.05, radius * 0.78)
+    graphics.fillStyle(0xd7dee4, 0.96)
+    graphics.fillCircle(radius - radius * 0.12, radius - radius * 0.16, radius * 0.58)
+    graphics.fillStyle(0xf9fbff, 0.72)
+    graphics.fillCircle(radius - radius * 0.26, radius - radius * 0.33, radius * 0.28)
+
+    graphics.fillStyle(theme.agedGold, 0.26)
+    graphics.fillEllipse(radius + radius * 0.2, radius + radius * 0.24, radius * 1.02, radius * 0.44)
+    graphics.fillStyle(theme.jade, 0.18)
+    graphics.fillEllipse(radius - radius * 0.08, radius + radius * 0.4, radius * 0.92, radius * 0.34)
+    graphics.fillStyle(0x15181d, 0.32)
+    graphics.fillEllipse(radius + radius * 0.28, radius - radius * 0.02, radius * 0.72, radius * 0.22)
+
+    graphics.fillStyle(0xffffff, highlightAlpha)
+    graphics.fillCircle(radius - radius * 0.38, radius - radius * 0.42, radius * 0.16)
+    graphics.fillStyle(0xffffff, highlightAlpha * 0.44)
+    graphics.fillCircle(radius - radius * 0.18, radius - radius * 0.28, radius * 0.08)
+
+    graphics.lineStyle(3, 0x090a0d, 1)
+    graphics.strokeCircle(radius, radius, radius - 1.5)
+    graphics.lineStyle(1, 0xf7fbff, 0.62)
+    graphics.strokeCircle(radius, radius, radius - 3.5)
     graphics.generateTexture('ball', radius * 2, radius * 2)
     graphics.destroy()
   }

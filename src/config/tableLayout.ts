@@ -270,6 +270,11 @@ export const tableLayout = {
     radius: 18,
     spawn: { x: 1000, y: 1728 },
     resetVelocity: { x: 0, y: 0 },
+    visual: {
+      style: 'chrome',
+      highlightStrength: 0.9,
+      edgeShadeStrength: 0.88,
+    },
   },
 
   multiball: {
