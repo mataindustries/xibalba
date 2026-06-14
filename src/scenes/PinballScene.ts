@@ -2673,6 +2673,42 @@ export class PinballScene extends Phaser.Scene {
     const trimAlpha = guide.trimAlpha ?? alpha * 0.78
     const trimWidth = Math.max(1.4, width * 0.12)
 
+    if (guide.style === 'slingGuard') {
+      this.drawSlingGuardHardware(graphics, from, to, width, alpha, {
+        trimOffset,
+        trimAlpha,
+        jadeAlpha: guide.jadeEdge ? alpha * 0.52 : alpha * 0.12,
+        endCaps: guide.endCaps ?? true,
+        rivetSpacing: guide.rivetSpacing,
+        rivetAlpha: guide.rivetAlpha,
+      })
+      return
+    }
+
+    if (guide.style === 'lowerHardware') {
+      this.drawLowerGuideHardware(graphics, from, to, width, alpha, {
+        trimOffset,
+        trimAlpha,
+        jadeAlpha: guide.jadeEdge ? alpha * 0.42 : alpha * 0.12,
+        endCaps: guide.endCaps ?? true,
+        rivetSpacing: guide.rivetSpacing,
+        rivetAlpha: guide.rivetAlpha,
+      })
+      return
+    }
+
+    if (guide.style === 'shortDeflector') {
+      this.drawShortDeflectorHardware(graphics, from, to, width, alpha, {
+        trimOffset,
+        trimAlpha,
+        jadeAlpha: guide.jadeEdge ? alpha * 0.46 : 0,
+        endCaps: guide.endCaps ?? true,
+        rivetSpacing: guide.rivetSpacing,
+        rivetAlpha: guide.rivetAlpha,
+      })
+      return
+    }
+
     if (guide.style === 'deflector') {
       this.drawPremiumHardwareBar(graphics, from, to, width, alpha, {
         trimAlpha,
@@ -2725,6 +2761,272 @@ export class PinballScene extends Phaser.Scene {
       graphics.lineStyle(Math.max(1.5, trimWidth), theme.agedGold, trimAlpha)
       graphics.strokeCircle(from.x, from.y, capRadius)
       graphics.strokeCircle(to.x, to.y, capRadius)
+    }
+  }
+
+  private drawShortDeflectorHardware(
+    graphics: Phaser.GameObjects.Graphics,
+    from: Point,
+    to: Point,
+    width: number,
+    alpha: number,
+    options: {
+      trimOffset: number
+      trimAlpha: number
+      jadeAlpha: number
+      endCaps: boolean
+      rivetSpacing?: number
+      rivetAlpha?: number
+    },
+  ) {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const length = Math.hypot(dx, dy)
+    if (length === 0) {
+      return
+    }
+
+    const ux = dx / length
+    const uy = dy / length
+    const nx = -uy
+    const ny = ux
+    const line = (offset: number, color: number, lineWidth: number, lineAlpha: number) => {
+      graphics.lineStyle(lineWidth, color, lineAlpha)
+      graphics.lineBetween(
+        from.x + nx * offset,
+        from.y + ny * offset,
+        to.x + nx * offset,
+        to.y + ny * offset,
+      )
+    }
+
+    graphics.lineStyle(width + 18, theme.ink, alpha * 0.4)
+    graphics.lineBetween(from.x + 3, from.y + 5, to.x + 3, to.y + 5)
+    line(0, theme.goldShadow, width + 8, alpha * 0.72)
+    line(0, theme.obsidian, width + 1, alpha * 0.98)
+    line(-options.trimOffset * 0.7, theme.agedGold, Math.max(3.2, width * 0.18), options.trimAlpha)
+    line(options.trimOffset * 0.68, theme.goldShadow, Math.max(2.2, width * 0.12), options.trimAlpha * 0.72)
+    line(0, theme.charcoal, Math.max(3.4, width * 0.18), alpha * 0.66)
+    line(0, theme.ink, Math.max(1.4, width * 0.06), alpha * 0.38)
+
+    if (options.jadeAlpha > 0) {
+      line(width * 0.1, theme.jade, Math.max(1.6, width * 0.07), options.jadeAlpha)
+      line(width * 0.1, theme.brightJade, Math.max(0.8, width * 0.032), options.jadeAlpha * 0.44)
+    }
+
+    const bracketSpan = width * 0.58
+    ;[length * 0.32, length * 0.68].forEach((distance) => {
+      const x = from.x + ux * distance
+      const y = from.y + uy * distance
+      graphics.lineStyle(Math.max(3, width * 0.15), theme.agedGold, options.trimAlpha * 0.66)
+      graphics.lineBetween(x - nx * bracketSpan, y - ny * bracketSpan, x + nx * bracketSpan, y + ny * bracketSpan)
+      graphics.lineStyle(Math.max(1.2, width * 0.055), theme.ink, alpha * 0.44)
+      graphics.lineBetween(x - nx * bracketSpan * 0.48, y - ny * bracketSpan * 0.48, x + nx * bracketSpan * 0.48, y + ny * bracketSpan * 0.48)
+    })
+
+    if (options.rivetSpacing && options.rivetSpacing > 0) {
+      for (let distance = options.rivetSpacing; distance < length; distance += options.rivetSpacing) {
+        const x = from.x + ux * distance
+        const y = from.y + uy * distance
+        const rivetAlpha = options.rivetAlpha ?? alpha * 0.58
+        this.drawMetalPost(graphics, x - nx * width * 0.24, y - ny * width * 0.24, Math.max(3.2, width * 0.13), rivetAlpha, false)
+        this.drawMetalPost(graphics, x + nx * width * 0.24, y + ny * width * 0.24, Math.max(2.8, width * 0.11), rivetAlpha * 0.76, false)
+      }
+    }
+
+    graphics.fillStyle(theme.ember, alpha * 0.24)
+    graphics.fillCircle(from.x + ux * length * 0.5, from.y + uy * length * 0.5, Math.max(2.2, width * 0.09))
+
+    if (options.endCaps) {
+      const capRadius = Math.max(7, width * 0.34)
+      this.drawMetalPost(graphics, from.x, from.y, capRadius, alpha * 0.94, options.jadeAlpha > 0)
+      this.drawMetalPost(graphics, to.x, to.y, capRadius, alpha * 0.94, options.jadeAlpha > 0)
+    }
+  }
+
+  private drawSlingGuardHardware(
+    graphics: Phaser.GameObjects.Graphics,
+    from: Point,
+    to: Point,
+    width: number,
+    alpha: number,
+    options: {
+      trimOffset: number
+      trimAlpha: number
+      jadeAlpha: number
+      endCaps: boolean
+      rivetSpacing?: number
+      rivetAlpha?: number
+    },
+  ) {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const length = Math.hypot(dx, dy)
+    if (length === 0) {
+      return
+    }
+
+    const ux = dx / length
+    const uy = dy / length
+    const nx = -uy
+    const ny = ux
+    const line = (offset: number, color: number, lineWidth: number, lineAlpha: number) => {
+      graphics.lineStyle(lineWidth, color, lineAlpha)
+      graphics.lineBetween(
+        from.x + nx * offset,
+        from.y + ny * offset,
+        to.x + nx * offset,
+        to.y + ny * offset,
+      )
+    }
+
+    graphics.lineStyle(width + 20, theme.ink, alpha * 0.34)
+    graphics.lineBetween(from.x + 3, from.y + 6, to.x + 3, to.y + 6)
+    line(0, theme.ink, width + 13, alpha * 0.66)
+    line(0, theme.goldShadow, width + 7, alpha * 0.54)
+    line(0, theme.obsidian, width + 1, alpha)
+    line(-options.trimOffset * 0.72, theme.agedGold, Math.max(3, width * 0.18), options.trimAlpha)
+    line(options.trimOffset * 0.68, theme.goldShadow, Math.max(2, width * 0.12), options.trimAlpha * 0.84)
+    line(0, theme.charcoal, Math.max(3.5, width * 0.2), alpha * 0.68)
+    line(0, theme.ink, Math.max(1.4, width * 0.06), alpha * 0.42)
+
+    if (options.jadeAlpha > 0) {
+      line(width * 0.18, theme.jade, Math.max(1.5, width * 0.07), options.jadeAlpha)
+      line(width * 0.18, theme.brightJade, Math.max(0.8, width * 0.03), options.jadeAlpha * 0.42)
+    }
+
+    const bracketWidth = Math.max(4, width * 0.18)
+    const bracketSpan = width * 0.68
+    const bracketDistances = [Math.min(18, length * 0.16), length * 0.5, length - Math.min(18, length * 0.16)]
+    bracketDistances.forEach((distance, index) => {
+      const x = from.x + ux * distance
+      const y = from.y + uy * distance
+      graphics.lineStyle(bracketWidth, index === 1 ? theme.agedGold : theme.goldShadow, options.trimAlpha * (index === 1 ? 0.74 : 0.62))
+      graphics.lineBetween(x - nx * bracketSpan, y - ny * bracketSpan, x + nx * bracketSpan, y + ny * bracketSpan)
+      graphics.lineStyle(Math.max(1.4, bracketWidth * 0.38), theme.ink, alpha * 0.42)
+      graphics.lineBetween(x - nx * bracketSpan * 0.58, y - ny * bracketSpan * 0.58, x + nx * bracketSpan * 0.58, y + ny * bracketSpan * 0.58)
+    })
+
+    if (options.rivetSpacing && options.rivetSpacing > 0) {
+      for (let distance = options.rivetSpacing; distance < length; distance += options.rivetSpacing) {
+        const rivetAlpha = options.rivetAlpha ?? alpha * 0.54
+        const leftX = from.x + ux * distance - nx * width * 0.31
+        const leftY = from.y + uy * distance - ny * width * 0.31
+        const rightX = from.x + ux * distance + nx * width * 0.31
+        const rightY = from.y + uy * distance + ny * width * 0.31
+        this.drawMetalPost(graphics, leftX, leftY, Math.max(3.4, width * 0.13), rivetAlpha, false)
+        this.drawMetalPost(graphics, rightX, rightY, Math.max(3.1, width * 0.11), rivetAlpha * 0.84, false)
+      }
+    }
+
+    const accentDistance = length * 0.64
+    graphics.fillStyle(theme.ember, alpha * 0.26)
+    graphics.fillCircle(
+      from.x + ux * accentDistance - nx * width * 0.05,
+      from.y + uy * accentDistance - ny * width * 0.05,
+      Math.max(2.2, width * 0.09),
+    )
+
+    if (options.endCaps) {
+      const capRadius = Math.max(7, width * 0.34)
+      this.drawMetalPost(graphics, from.x, from.y, capRadius, alpha * 0.92, options.jadeAlpha > alpha * 0.18)
+      this.drawMetalPost(graphics, to.x, to.y, capRadius, alpha * 0.92, options.jadeAlpha > alpha * 0.18)
+    }
+  }
+
+  private drawLowerGuideHardware(
+    graphics: Phaser.GameObjects.Graphics,
+    from: Point,
+    to: Point,
+    width: number,
+    alpha: number,
+    options: {
+      trimOffset: number
+      trimAlpha: number
+      jadeAlpha: number
+      endCaps: boolean
+      rivetSpacing?: number
+      rivetAlpha?: number
+    },
+  ) {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const length = Math.hypot(dx, dy)
+    if (length === 0) {
+      return
+    }
+
+    const ux = dx / length
+    const uy = dy / length
+    const nx = -uy
+    const ny = ux
+    const line = (offset: number, color: number, lineWidth: number, lineAlpha: number) => {
+      graphics.lineStyle(lineWidth, color, lineAlpha)
+      graphics.lineBetween(
+        from.x + nx * offset,
+        from.y + ny * offset,
+        to.x + nx * offset,
+        to.y + ny * offset,
+      )
+    }
+
+    graphics.lineStyle(width + 16, theme.ink, alpha * 0.26)
+    graphics.lineBetween(from.x + 2, from.y + 5, to.x + 2, to.y + 5)
+    line(0, theme.ink, width + 10, alpha * 0.58)
+    line(0, theme.charcoal, width + 5, alpha * 0.78)
+    line(0, theme.obsidian, width, alpha * 1.08)
+    line(-width * 0.42, theme.goldShadow, Math.max(2.2, width * 0.18), options.trimAlpha * 0.82)
+    line(-width * 0.28, theme.agedGold, Math.max(1.5, width * 0.09), options.trimAlpha)
+    line(width * 0.38, theme.goldShadow, Math.max(1.4, width * 0.08), options.trimAlpha * 0.66)
+    line(0, theme.ink, Math.max(1.4, width * 0.08), alpha * 0.34)
+
+    if (options.jadeAlpha > 0) {
+      line(width * 0.08, theme.jade, Math.max(1.2, width * 0.07), options.jadeAlpha)
+      line(width * 0.08, theme.brightJade, Math.max(0.8, width * 0.035), options.jadeAlpha * 0.42)
+    }
+
+    const bracketInset = Math.min(24, length * 0.18)
+    ;[bracketInset, length - bracketInset].forEach((distance) => {
+      const x = from.x + ux * distance
+      const y = from.y + uy * distance
+      lineAtPoint(graphics, x, y, nx, ny, width * 0.58, Math.max(3, width * 0.16), theme.agedGold, options.trimAlpha * 0.72)
+      lineAtPoint(graphics, x + ux * 2, y + uy * 2, nx, ny, width * 0.36, Math.max(1.6, width * 0.08), theme.ink, alpha * 0.48)
+    })
+
+    if (options.rivetSpacing && options.rivetSpacing > 0) {
+      for (let distance = options.rivetSpacing; distance < length; distance += options.rivetSpacing) {
+        const x = from.x + ux * distance
+        const y = from.y + uy * distance
+        const rivetAlpha = options.rivetAlpha ?? alpha * 0.54
+        this.drawMetalPost(graphics, x - nx * width * 0.18, y - ny * width * 0.18, Math.max(3.2, width * 0.18), rivetAlpha, false)
+      }
+    }
+
+    const accentDistance = length * 0.54
+    const accentX = from.x + ux * accentDistance + nx * width * 0.2
+    const accentY = from.y + uy * accentDistance + ny * width * 0.2
+    graphics.fillStyle(theme.ember, alpha * 0.22)
+    graphics.fillCircle(accentX, accentY, Math.max(1.8, width * 0.1))
+
+    if (options.endCaps) {
+      const capRadius = Math.max(5.5, width * 0.38)
+      this.drawMetalPost(graphics, from.x, from.y, capRadius, alpha * 0.9, options.jadeAlpha > alpha * 0.2)
+      this.drawMetalPost(graphics, to.x, to.y, capRadius, alpha * 0.9, options.jadeAlpha > alpha * 0.2)
+    }
+
+    function lineAtPoint(
+      target: Phaser.GameObjects.Graphics,
+      x: number,
+      y: number,
+      normalX: number,
+      normalY: number,
+      span: number,
+      lineWidth: number,
+      color: number,
+      lineAlpha: number,
+    ) {
+      target.lineStyle(lineWidth, color, lineAlpha)
+      target.lineBetween(x - normalX * span, y - normalY * span, x + normalX * span, y + normalY * span)
     }
   }
 
