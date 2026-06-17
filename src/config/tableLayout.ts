@@ -116,11 +116,10 @@ const shooterExitX = 965
 const shooterExitY = 320
 const shooterExitWidth = 130
 const shooterExitHeight = 260
-const shooterExitVelocityX = -6.4
-const shooterExitVelocityY = 3.2
 const shooterExitRepositionX = 820
 const shooterExitRepositionY = 455
 const shooterExitFallbackY = 470
+const shooterExitDirection = { x: -0.9, y: -0.44 }
 
 export const tableLayout = {
   // All playable coordinates use a clean 1080x1920 table space. The 941x1672
@@ -168,20 +167,21 @@ export const tableLayout = {
     flipperImpulse: 20.4,
     flipperContactRadius: 40,
     flipperImpulseCooldownMs: 72,
-    // TUNING: plungerForce is max launch velocity; shooterExit values control lane feed into play.
-    plungerTapForce: 23,
-    plungerForce: 37,
+    // TUNING: plungerMinVelocity/plungerMaxVelocity set the lane shot; shooterExit values carry that speed into play.
+    plungerMinVelocity: 23,
+    plungerMaxVelocity: 42,
     plungerChargeRate: 0.028,
     shooterExitCooldownMs: 150,
     // TUNING: shooter-lane exit. Keep the sensor near x 965, y 250-400.
     // If the ball sticks, enlarge/move the sensor or move repositionX slightly left.
-    // If the exit feels fake, move repositionX closer to 900 and reduce velocityX/Y.
+    // If the exit feels too hot, reduce shooterExitVelocityScale/cap before moving table geometry.
     shooterExitX,
     shooterExitY,
     shooterExitWidth,
     shooterExitHeight,
-    shooterExitVelocityX,
-    shooterExitVelocityY,
+    shooterExitVelocityScale: 0.54,
+    shooterExitVelocityCap: 20.5,
+    shooterExitDirection,
     shooterExitRepositionX,
     shooterExitRepositionY,
     shooterExitFallbackY,

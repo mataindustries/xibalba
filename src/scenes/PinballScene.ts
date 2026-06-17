@@ -1589,7 +1589,11 @@ export class PinballScene extends Phaser.Scene {
     this.plungerHeld = false
     const ball = this.plungerBall()
     if (ball) {
-      const launchVelocity = Phaser.Math.Linear(tableLayout.tuning.plungerTapForce, tableLayout.tuning.plungerForce, Math.max(0.12, this.plungerCharge))
+      const launchVelocity = Phaser.Math.Linear(
+        tableLayout.tuning.plungerMinVelocity,
+        tableLayout.tuning.plungerMaxVelocity,
+        Math.max(0.1, this.plungerCharge),
+      )
       ball.image.setPosition(tableLayout.plunger.x, ball.image.y)
       ball.image.setVelocity(0, -launchVelocity)
       ball.image.setAngularVelocity(0)
@@ -1878,14 +1882,33 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.lastShooterExitAt = this.time.now
+    const exitVelocity = this.shooterExitVelocity(ball)
     // TUNING: shooterExitRepositionX/Y should sit just left of the shooter lane exit.
-    this.setBallPositionAndVelocity(ball, { x: tableLayout.tuning.shooterExitRepositionX, y: tableLayout.tuning.shooterExitRepositionY }, {
-      x: tableLayout.tuning.shooterExitVelocityX,
-      y: tableLayout.tuning.shooterExitVelocityY,
-    })
+    this.setBallPositionAndVelocity(
+      ball,
+      { x: tableLayout.tuning.shooterExitRepositionX, y: tableLayout.tuning.shooterExitRepositionY },
+      exitVelocity,
+    )
     if (this.ballSaverArmed) {
       this.ballSaverArmed = false
       this.activateBallSaver()
+    }
+  }
+
+  private shooterExitVelocity(ball: BallRuntime): Point {
+    const incomingVelocity = ball.body.velocity
+    const incomingSpeed = Math.hypot(incomingVelocity.x, incomingVelocity.y)
+    const minimumExitSpeed = tableLayout.tuning.plungerMinVelocity * tableLayout.tuning.shooterExitVelocityScale
+    const exitSpeed = Phaser.Math.Clamp(
+      incomingSpeed * tableLayout.tuning.shooterExitVelocityScale,
+      minimumExitSpeed,
+      tableLayout.tuning.shooterExitVelocityCap,
+    )
+    const direction = this.normalizedVector(tableLayout.tuning.shooterExitDirection, { x: -0.9, y: -0.44 })
+
+    return {
+      x: direction.x * exitSpeed,
+      y: direction.y * exitSpeed,
     }
   }
 
@@ -2409,6 +2432,22 @@ export class PinballScene extends Phaser.Scene {
     return {
       x: pivot.x + Math.cos(angle) * distance,
       y: pivot.y + Math.sin(angle) * distance,
+    }
+  }
+
+  private normalizedVector(vector: Point, fallback: Point): Point {
+    const length = Math.hypot(vector.x, vector.y)
+    if (length > 0) {
+      return {
+        x: vector.x / length,
+        y: vector.y / length,
+      }
+    }
+
+    const fallbackLength = Math.max(1, Math.hypot(fallback.x, fallback.y))
+    return {
+      x: fallback.x / fallbackLength,
+      y: fallback.y / fallbackLength,
     }
   }
 
