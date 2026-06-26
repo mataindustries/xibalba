@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { tableLayout } from '../config/tableLayout'
+import { loadWallOfChampions } from '../wallOfChampions'
 import type {
   BumperBody,
   FlipperConfig,
@@ -11,6 +12,7 @@ import type {
   TrapKickerZone,
   WallSegment,
 } from '../config/tableLayout'
+import type { ChampionEntry } from '../wallOfChampions'
 
 type FlipperRuntime = {
   config: FlipperConfig
@@ -162,6 +164,7 @@ export class PinballScene extends Phaser.Scene {
   private lastSensorHit = 'none'
   private lastScoreEvent = 'none'
   private highScore = 0
+  private champions: ChampionEntry[] = []
   private audioContext?: AudioContext
   private lastTrailAt = 0
 
@@ -199,6 +202,7 @@ export class PinballScene extends Phaser.Scene {
     this.spawnBall(tableLayout.ball.spawn, tableLayout.ball.resetVelocity)
     this.createPlungerVisual()
     this.highScore = this.loadHighScore()
+    this.champions = loadWallOfChampions()
     this.createHud()
     this.createTouchHints()
     this.createStartOverlay()
@@ -859,7 +863,108 @@ export class PinballScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(91)
 
-    this.startOverlay = this.add.container(0, 0, [titleArt, textPlate, high, prompt, controls, dev]).setDepth(90)
+    const wallOfChampions = this.createWallOfChampionsPanel(this.champions)
+
+    this.startOverlay = this.add.container(0, 0, [titleArt, textPlate, high, prompt, controls, dev, wallOfChampions]).setDepth(90)
+  }
+
+  private createWallOfChampionsPanel(champions: ChampionEntry[]) {
+    const width = 660
+    const height = 274
+    const panel = this.add.container(tableLayout.table.width / 2, 1502).setDepth(91)
+    const stone = this.add.graphics()
+
+    stone.fillStyle(theme.ink, 0.78)
+    stone.fillRoundedRect(-width / 2, -height / 2, width, height, 8)
+    stone.fillStyle(theme.charcoal, 0.5)
+    stone.fillRoundedRect(-width / 2 + 12, -height / 2 + 12, width - 24, height - 24, 5)
+    stone.lineStyle(8, theme.goldShadow, 0.72)
+    stone.strokeRoundedRect(-width / 2, -height / 2, width, height, 8)
+    stone.lineStyle(3, theme.agedGold, 0.88)
+    stone.strokeRoundedRect(-width / 2 + 11, -height / 2 + 11, width - 22, height - 22, 5)
+    stone.lineStyle(2, theme.jade, 0.36)
+    stone.strokeRoundedRect(-width / 2 + 25, -height / 2 + 25, width - 50, height - 50, 3)
+
+    stone.fillStyle(theme.jade, 0.1)
+    stone.fillTriangle(-width / 2 + 34, -height / 2 + 36, -width / 2 + 92, -height / 2 + 36, -width / 2 + 62, -height / 2 + 82)
+    stone.fillTriangle(width / 2 - 34, -height / 2 + 36, width / 2 - 92, -height / 2 + 36, width / 2 - 62, -height / 2 + 82)
+    stone.fillStyle(theme.ember, 0.16)
+    stone.fillCircle(-width / 2 + 42, height / 2 - 42, 10)
+    stone.fillCircle(width / 2 - 42, height / 2 - 42, 10)
+
+    for (let index = 0; index < 9; index += 1) {
+      const x = -width / 2 + 82 + index * 62
+      const topY = -height / 2 + 18
+      const bottomY = height / 2 - 18
+      stone.fillStyle(index % 2 === 0 ? theme.agedGold : theme.goldShadow, 0.5)
+      stone.fillRect(x, topY, 20, 4)
+      stone.fillRect(x + 8, topY + 6, 4, 12)
+      stone.fillStyle(theme.jade, 0.18)
+      stone.fillRect(x, bottomY - 4, 20, 4)
+      stone.fillRect(x + 8, bottomY - 18, 4, 12)
+    }
+
+    const title = this.add
+      .text(0, -96, 'WALL OF CHAMPIONS', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '26px',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
+        strokeThickness: 5,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+
+    const divider = this.add.graphics()
+    divider.lineStyle(3, theme.goldShadow, 0.6)
+    divider.lineBetween(-226, -60, 226, -60)
+    divider.lineStyle(1, theme.brightJade, 0.38)
+    divider.lineBetween(-184, -50, 184, -50)
+    divider.fillStyle(theme.ember, 0.42)
+    divider.fillCircle(0, -56, 5)
+    divider.fillStyle(theme.agedGold, 0.52)
+    divider.fillTriangle(-18, -56, -7, -64, -7, -48)
+    divider.fillTriangle(18, -56, 7, -64, 7, -48)
+
+    const rowsBacking = this.add.graphics()
+    champions.forEach((_champion, index) => {
+      const rowY = -31 + index * 52
+      rowsBacking.fillStyle(index % 2 === 0 ? theme.obsidian : theme.ink, 0.42)
+      rowsBacking.fillRoundedRect(-250, rowY - 19, 500, 38, 4)
+      rowsBacking.lineStyle(1, index === 0 ? theme.agedGold : theme.goldShadow, index === 0 ? 0.52 : 0.26)
+      rowsBacking.strokeRoundedRect(-250, rowY - 19, 500, 38, 4)
+      rowsBacking.fillStyle(index === 0 ? theme.brightJade : theme.jade, index === 0 ? 0.24 : 0.12)
+      rowsBacking.fillRect(-239, rowY - 10, 4, 20)
+      rowsBacking.fillRect(235, rowY - 10, 4, 20)
+    })
+
+    const rows = this.add
+      .text(-218, -44, this.wallOfChampionsRows(champions), {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '30px',
+        color: theme.css.ivory,
+        stroke: theme.css.ink,
+        strokeThickness: 5,
+        lineSpacing: 14,
+      })
+      .setOrigin(0, 0)
+
+    const sideGlyphs = this.add.graphics()
+    ;[-1, 1].forEach((side) => {
+      const x = side * 286
+      sideGlyphs.lineStyle(2, theme.goldShadow, 0.54)
+      sideGlyphs.strokeTriangle(x, -31, x + side * 22, -13, x, 5)
+      sideGlyphs.strokeTriangle(x, 21, x + side * 22, 39, x, 57)
+      sideGlyphs.fillStyle(theme.jade, 0.2)
+      sideGlyphs.fillCircle(x + side * 9, 84, 6)
+    })
+
+    panel.add([stone, title, divider, rowsBacking, rows, sideGlyphs])
+    return panel
+  }
+
+  private wallOfChampionsRows(champions: ChampionEntry[]) {
+    return champions.map((champion, index) => `${index + 1}. ${champion.initials.padEnd(3, ' ')}  ${String(champion.score).padStart(6, ' ')}`).join('\n')
   }
 
   private createPauseOverlay() {
