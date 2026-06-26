@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { XibalbaAudioManager } from '../audioManager'
 import { tableLayout } from '../config/tableLayout'
+import { fetchGlobalScores, submitGlobalScore } from '../globalLeaderboard'
 import { loadWallOfChampions, qualifiesForWallOfChampions, saveChampionScore } from '../wallOfChampions'
 import type {
   BumperBody,
@@ -59,6 +60,7 @@ type ControlKeys = {
 type ComboHitKind = 'bumper' | 'sling' | 'targetOrLane'
 type EclipseState = 'NORMAL' | 'ECLIPSE READY' | 'ECLIPSE MULTIBALL'
 type BallState = 'IN PLAY' | 'PLUNGER' | 'DRAINED' | 'GAME OVER'
+type WallDisplayMode = 'local' | 'loading' | 'global'
 
 type ShotTestPlacement = 'leftFlipper' | 'rightFlipper' | 'centerLower' | 'shooterExit' | 'upperRollovers'
 type ShotTestLaunch = 'leftUpper' | 'rightUpper' | 'centerJackpot'
@@ -70,6 +72,7 @@ type ScorePopupOptions = {
 }
 
 const HIGH_SCORE_KEY = 'xibalba-pinball-high-score'
+const GLOBAL_LEADERBOARD_VERSION = 'g2'
 const assets = {
   playfield: tableLayout.table.background,
   titleCard: {
@@ -168,8 +171,11 @@ export class PinballScene extends Phaser.Scene {
   private wallOfChampionsPanel?: Phaser.GameObjects.Container
   private wallOfChampionsRowsText?: Phaser.GameObjects.Text
   private wallOfChampionsEngravingText?: Phaser.GameObjects.Text
+  private wallOfChampionsStatusText?: Phaser.GameObjects.Text
   private wallOfChampionsRevealAccent?: Phaser.GameObjects.Graphics
+  private wallTopRankAccent?: Phaser.GameObjects.Graphics
   private wallRecentEntryAccent?: Phaser.GameObjects.Graphics
+  private globalLeaderboardRequestId = 0
   private gameOverPlateShadow?: Phaser.GameObjects.Rectangle
   private gameOverPlate?: Phaser.GameObjects.Rectangle
   private gameOverPlateTrim?: Phaser.GameObjects.Rectangle
@@ -236,6 +242,7 @@ export class PinballScene extends Phaser.Scene {
     this.bindCollisions()
     this.drawRuntimeInsertUnderlays()
     this.setGameplayFrozen(true)
+    void this.loadGlobalLeaderboard().catch(() => this.setWallDisplay('local', this.champions))
   }
 
   update(_time: number, delta: number) {
@@ -955,7 +962,7 @@ export class PinballScene extends Phaser.Scene {
 
   private createWallOfChampionsPanel(champions: ChampionEntry[]) {
     const width = 700
-    const height = 296
+    const height = 330
     const panel = this.add.container(tableLayout.table.width / 2, 1512).setDepth(91)
     const stone = this.add.graphics()
 
@@ -1028,7 +1035,7 @@ export class PinballScene extends Phaser.Scene {
     divider.fillRect(2, -51, 3, 4)
 
     const rowsBacking = this.add.graphics()
-    champions.forEach((_champion, index) => {
+    for (let index = 0; index < 3; index += 1) {
       const rowY = -29 + index * 56
       rowsBacking.fillStyle(index === 0 ? theme.goldShadow : index % 2 === 0 ? theme.obsidian : theme.ink, index === 0 ? 0.22 : 0.56)
       rowsBacking.fillRoundedRect(-268, rowY - 21, 536, 42, 4)
@@ -1037,7 +1044,7 @@ export class PinballScene extends Phaser.Scene {
       rowsBacking.fillStyle(index === 0 ? theme.brightJade : theme.jade, index === 0 ? 0.24 : 0.12)
       rowsBacking.fillRect(-255, rowY - 11, 5, 22)
       rowsBacking.fillRect(250, rowY - 11, 5, 22)
-    })
+    }
 
     const topRankAccent = this.add.graphics()
     topRankAccent.fillStyle(theme.jade, 0.22)
@@ -1048,6 +1055,7 @@ export class PinballScene extends Phaser.Scene {
     topRankAccent.fillTriangle(-252, -29, -244, -36, -244, -22)
     topRankAccent.fillTriangle(252, -29, 244, -36, 244, -22)
     topRankAccent.setAlpha(0.18)
+    this.wallTopRankAccent = topRankAccent
 
     const recentEntryAccent = this.add.graphics()
     recentEntryAccent.fillStyle(theme.agedGold, 0.24)
@@ -1084,6 +1092,19 @@ export class PinballScene extends Phaser.Scene {
       .setShadow(0, 2, theme.css.ink, 6, true, true)
     this.wallOfChampionsRowsText = rows
 
+    const status = this.add
+      .text(0, 126, 'LOCAL WALL', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '18px',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
+        strokeThickness: 4,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.88)
+    this.wallOfChampionsStatusText = status
+
     const sideGlyphs = this.add.graphics()
     ;[-1, 1].forEach((side) => {
       const x = side * 304
@@ -1103,7 +1124,7 @@ export class PinballScene extends Phaser.Scene {
     revealAccent.setAlpha(0.18)
     this.wallOfChampionsRevealAccent = revealAccent
 
-    panel.add([stone, title, divider, rowsBacking, topRankAccent, recentEntryAccent, engravingRows, rows, sideGlyphs, revealAccent])
+    panel.add([stone, title, divider, rowsBacking, topRankAccent, recentEntryAccent, engravingRows, rows, status, sideGlyphs, revealAccent])
     this.tweens.add({
       targets: topRankAccent,
       alpha: 0.38,
@@ -1116,15 +1137,91 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private wallOfChampionsRows(champions: ChampionEntry[]) {
+    if (champions.length === 0) {
+      return '     NO SCORES CARVED'
+    }
+
     return champions
       .map((champion, index) => `${index + 1}.  ${champion.initials.padEnd(3, ' ')}        ${champion.score.toLocaleString('en-US').padStart(7, ' ')}`)
       .join('\n')
   }
 
-  private updateWallOfChampionsPanel() {
-    const rows = this.wallOfChampionsRows(this.champions)
+  private updateWallOfChampionsPanel(champions: ChampionEntry[] = this.champions) {
+    const rows = this.wallOfChampionsRows(champions)
     this.wallOfChampionsRowsText?.setText(rows)
     this.wallOfChampionsEngravingText?.setText(rows)
+    this.wallTopRankAccent?.setVisible(champions.length > 0)
+  }
+
+  private async loadGlobalLeaderboard() {
+    const requestId = ++this.globalLeaderboardRequestId
+    this.setWallDisplay('loading', this.champions)
+    const scores = await fetchGlobalScores()
+    if (requestId !== this.globalLeaderboardRequestId) {
+      return
+    }
+
+    if (scores === null) {
+      this.setWallDisplay('local', this.champions)
+      return
+    }
+
+    this.clearRecentWallHighlight()
+    this.setWallDisplay('global', scores.slice(0, 3))
+  }
+
+  private async submitChampionGlobally(initials: string, score: number) {
+    const requestId = ++this.globalLeaderboardRequestId
+    this.setWallDisplay('loading', this.champions)
+    const submittedScores = await submitGlobalScore(initials, score, GLOBAL_LEADERBOARD_VERSION)
+    if (requestId !== this.globalLeaderboardRequestId) {
+      return
+    }
+
+    if (submittedScores === null) {
+      this.setWallDisplay('local', this.champions)
+      return
+    }
+
+    const refreshedScores = await fetchGlobalScores()
+    if (requestId !== this.globalLeaderboardRequestId) {
+      return
+    }
+
+    const globalScores = refreshedScores ?? submittedScores
+    const displayedScores = globalScores.slice(0, 3)
+    this.clearRecentWallHighlight()
+    this.setWallDisplay('global', displayedScores)
+    const globalRank = displayedScores.findIndex((champion) => champion.initials === initials && champion.score === score)
+    this.highlightWallEntry(globalRank, displayedScores.length)
+  }
+
+  private setWallDisplay(mode: WallDisplayMode, champions: ChampionEntry[]) {
+    this.updateWallOfChampionsPanel(champions)
+
+    const status = this.wallOfChampionsStatusText
+    if (!status) {
+      return
+    }
+
+    if (mode === 'loading') {
+      status.setText('CONTACTING TEMPLE...').setColor(theme.css.bone).setAlpha(0.7)
+      return
+    }
+
+    status
+      .setText(mode === 'global' ? 'GLOBAL WALL' : 'LOCAL WALL')
+      .setColor(mode === 'global' ? theme.css.brightJade : theme.css.agedGold)
+      .setAlpha(mode === 'global' ? 0.96 : 0.88)
+  }
+
+  private clearRecentWallHighlight() {
+    if (!this.wallRecentEntryAccent) {
+      return
+    }
+
+    this.tweens.killTweensOf(this.wallRecentEntryAccent)
+    this.wallRecentEntryAccent.setVisible(false)
   }
 
   private createPauseOverlay() {
@@ -2839,12 +2936,13 @@ export class PinballScene extends Phaser.Scene {
       this.tweens.killTweensOf(this.initialsSelectionMarker)
       this.initialsSelectionMarker.setAlpha(0.9)
     }
-    this.updateWallOfChampionsPanel()
+    this.setWallDisplay('local', this.champions)
     this.gameOverOverlay?.setVisible(false)
     this.initialsEntryPanel?.setVisible(false)
     this.startOverlay?.setVisible(true)
     this.revealUpdatedWallOfChampions(carvedRank)
     this.updateHud()
+    void this.submitChampionGlobally(carvedInitials, carvedScore).catch(() => this.setWallDisplay('local', this.champions))
   }
 
   private revealUpdatedWallOfChampions(carvedRank: number) {
@@ -2869,13 +2967,17 @@ export class PinballScene extends Phaser.Scene {
       repeat: 2,
     })
 
-    if (!this.wallRecentEntryAccent || carvedRank < 0 || carvedRank >= this.champions.length) {
+    this.highlightWallEntry(carvedRank, this.champions.length)
+  }
+
+  private highlightWallEntry(rank: number, entryCount: number) {
+    if (!this.wallRecentEntryAccent || rank < 0 || rank >= entryCount) {
       return
     }
 
     this.tweens.killTweensOf(this.wallRecentEntryAccent)
     this.wallRecentEntryAccent
-      .setY(-29 + carvedRank * 56)
+      .setY(-29 + rank * 56)
       .setVisible(true)
       .setAlpha(0)
     this.tweens.add({
