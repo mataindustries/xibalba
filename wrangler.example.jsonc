@@ -1,0 +1,15 @@
+{
+  // Copy to wrangler.local.jsonc and replace both placeholders for local D1 testing.
+  // Do not commit an active wrangler.jsonc unless it should become the Pages config source of truth.
+  "name": "REPLACE_WITH_PAGES_PROJECT_NAME",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-06-26",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xibalba-global-leaderboard",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "preview_database_id": "DB"
+    }
+  ]
+}
