@@ -222,35 +222,6 @@ export const tableLayout = {
   },
 
   juice: {
-    soundVolume: 0.14,
-    sounds: {
-      flipperHit: [
-        { frequency: 180, durationMs: 42, type: 'square', volume: 0.56 },
-        { frequency: 320, durationMs: 34, type: 'triangle', volume: 0.28 },
-      ],
-      bumperHit: [{ frequency: 520, durationMs: 70, type: 'sine', volume: 0.7 }],
-      slingHit: [{ frequency: 360, durationMs: 58, type: 'sawtooth', volume: 0.45 }],
-      targetHit: [{ frequency: 620, durationMs: 48, type: 'square', volume: 0.34 }],
-      rolloverHit: [{ frequency: 760, durationMs: 86, type: 'triangle', volume: 0.38 }],
-      jackpot: [
-        { frequency: 520, durationMs: 90, type: 'triangle', volume: 0.5 },
-        { frequency: 780, durationMs: 120, type: 'triangle', volume: 0.42, delayMs: 60 },
-      ],
-      eclipseReady: [
-        { frequency: 440, durationMs: 120, type: 'sine', volume: 0.46 },
-        { frequency: 660, durationMs: 140, type: 'sine', volume: 0.42, delayMs: 80 },
-      ],
-      eclipseMultiball: [
-        { frequency: 220, durationMs: 110, type: 'sawtooth', volume: 0.45 },
-        { frequency: 440, durationMs: 160, type: 'triangle', volume: 0.5, delayMs: 70 },
-        { frequency: 880, durationMs: 220, type: 'sine', volume: 0.34, delayMs: 150 },
-      ],
-      drain: [{ frequency: 140, durationMs: 180, type: 'sawtooth', volume: 0.42 }],
-      ballSave: [
-        { frequency: 360, durationMs: 100, type: 'triangle', volume: 0.44 },
-        { frequency: 720, durationMs: 120, type: 'sine', volume: 0.36, delayMs: 80 },
-      ],
-    },
     screenShake: {
       bumper: { durationMs: 64, intensity: 0.0018 },
       jackpot: { durationMs: 110, intensity: 0.0026 },
