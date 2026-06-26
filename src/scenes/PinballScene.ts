@@ -165,8 +165,15 @@ export class PinballScene extends Phaser.Scene {
   private lastScoreEvent = 'none'
   private highScore = 0
   private champions: ChampionEntry[] = []
+  private wallOfChampionsPanel?: Phaser.GameObjects.Container
   private wallOfChampionsRowsText?: Phaser.GameObjects.Text
+  private wallOfChampionsRevealAccent?: Phaser.GameObjects.Graphics
+  private gameOverPlateShadow?: Phaser.GameObjects.Rectangle
+  private gameOverPlate?: Phaser.GameObjects.Rectangle
+  private gameOverPlateTrim?: Phaser.GameObjects.Rectangle
+  private championCeremonyDecor?: Phaser.GameObjects.Container
   private initialsEntryPanel?: Phaser.GameObjects.Container
+  private initialsSelectionMarker?: Phaser.GameObjects.Graphics
   private initialsSlotBackings: Phaser.GameObjects.Rectangle[] = []
   private initialsSlotTexts: Phaser.GameObjects.Text[] = []
   private initialsSaveButtonBacking?: Phaser.GameObjects.Rectangle
@@ -842,6 +849,7 @@ export class PinballScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5)
+      .setName('startPrompt')
       .setDepth(91)
 
     const controls = this.add
@@ -874,37 +882,41 @@ export class PinballScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(91)
 
-    const wallOfChampions = this.createWallOfChampionsPanel(this.champions)
+    this.wallOfChampionsPanel = this.createWallOfChampionsPanel(this.champions)
 
-    this.startOverlay = this.add.container(0, 0, [titleArt, textPlate, high, prompt, controls, dev, wallOfChampions]).setDepth(90)
+    this.startOverlay = this.add.container(0, 0, [titleArt, textPlate, high, prompt, controls, dev, this.wallOfChampionsPanel]).setDepth(90)
   }
 
   private createWallOfChampionsPanel(champions: ChampionEntry[]) {
-    const width = 660
-    const height = 274
-    const panel = this.add.container(tableLayout.table.width / 2, 1502).setDepth(91)
+    const width = 700
+    const height = 296
+    const panel = this.add.container(tableLayout.table.width / 2, 1512).setDepth(91)
     const stone = this.add.graphics()
 
-    stone.fillStyle(theme.ink, 0.78)
+    stone.fillStyle(theme.ink, 0.7)
+    stone.fillRoundedRect(-width / 2 + 10, -height / 2 + 14, width, height, 8)
+    stone.fillStyle(theme.ink, 0.94)
     stone.fillRoundedRect(-width / 2, -height / 2, width, height, 8)
-    stone.fillStyle(theme.charcoal, 0.5)
+    stone.fillStyle(theme.charcoal, 0.7)
     stone.fillRoundedRect(-width / 2 + 12, -height / 2 + 12, width - 24, height - 24, 5)
-    stone.lineStyle(8, theme.goldShadow, 0.72)
+    stone.fillStyle(theme.obsidian, 0.54)
+    stone.fillRoundedRect(-width / 2 + 24, -height / 2 + 24, width - 48, height - 48, 3)
+    stone.lineStyle(9, theme.goldShadow, 0.76)
     stone.strokeRoundedRect(-width / 2, -height / 2, width, height, 8)
-    stone.lineStyle(3, theme.agedGold, 0.88)
+    stone.lineStyle(3, theme.agedGold, 0.94)
     stone.strokeRoundedRect(-width / 2 + 11, -height / 2 + 11, width - 22, height - 22, 5)
-    stone.lineStyle(2, theme.jade, 0.36)
+    stone.lineStyle(2, theme.jade, 0.42)
     stone.strokeRoundedRect(-width / 2 + 25, -height / 2 + 25, width - 50, height - 50, 3)
 
-    stone.fillStyle(theme.jade, 0.1)
-    stone.fillTriangle(-width / 2 + 34, -height / 2 + 36, -width / 2 + 92, -height / 2 + 36, -width / 2 + 62, -height / 2 + 82)
-    stone.fillTriangle(width / 2 - 34, -height / 2 + 36, width / 2 - 92, -height / 2 + 36, width / 2 - 62, -height / 2 + 82)
-    stone.fillStyle(theme.ember, 0.16)
-    stone.fillCircle(-width / 2 + 42, height / 2 - 42, 10)
-    stone.fillCircle(width / 2 - 42, height / 2 - 42, 10)
+    stone.fillStyle(theme.jade, 0.13)
+    stone.fillTriangle(-width / 2 + 34, -height / 2 + 36, -width / 2 + 98, -height / 2 + 36, -width / 2 + 66, -height / 2 + 84)
+    stone.fillTriangle(width / 2 - 34, -height / 2 + 36, width / 2 - 98, -height / 2 + 36, width / 2 - 66, -height / 2 + 84)
+    stone.fillStyle(theme.ember, 0.24)
+    stone.fillCircle(-width / 2 + 44, height / 2 - 42, 9)
+    stone.fillCircle(width / 2 - 44, height / 2 - 42, 9)
 
-    for (let index = 0; index < 9; index += 1) {
-      const x = -width / 2 + 82 + index * 62
+    for (let index = 0; index < 10; index += 1) {
+      const x = -width / 2 + 63 + index * 64
       const topY = -height / 2 + 18
       const bottomY = height / 2 - 18
       stone.fillStyle(index % 2 === 0 ? theme.agedGold : theme.goldShadow, 0.5)
@@ -918,65 +930,78 @@ export class PinballScene extends Phaser.Scene {
     const title = this.add
       .text(0, -96, 'WALL OF CHAMPIONS', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '26px',
+        fontSize: '29px',
         color: theme.css.agedGold,
         stroke: theme.css.ink,
-        strokeThickness: 5,
+        strokeThickness: 6,
         align: 'center',
       })
       .setOrigin(0.5)
+      .setShadow(0, 2, theme.css.ink, 8, true, true)
 
     const divider = this.add.graphics()
     divider.lineStyle(3, theme.goldShadow, 0.6)
-    divider.lineBetween(-226, -60, 226, -60)
+    divider.lineBetween(-244, -60, 244, -60)
     divider.lineStyle(1, theme.brightJade, 0.38)
-    divider.lineBetween(-184, -50, 184, -50)
-    divider.fillStyle(theme.ember, 0.42)
-    divider.fillCircle(0, -56, 5)
-    divider.fillStyle(theme.agedGold, 0.52)
-    divider.fillTriangle(-18, -56, -7, -64, -7, -48)
-    divider.fillTriangle(18, -56, 7, -64, 7, -48)
+    divider.lineBetween(-198, -50, 198, -50)
+    divider.fillStyle(theme.ember, 0.68)
+    divider.fillCircle(0, -56, 6)
+    divider.fillStyle(theme.agedGold, 0.72)
+    divider.fillTriangle(-22, -56, -8, -66, -8, -46)
+    divider.fillTriangle(22, -56, 8, -66, 8, -46)
 
     const rowsBacking = this.add.graphics()
     champions.forEach((_champion, index) => {
-      const rowY = -31 + index * 52
-      rowsBacking.fillStyle(index % 2 === 0 ? theme.obsidian : theme.ink, 0.42)
-      rowsBacking.fillRoundedRect(-250, rowY - 19, 500, 38, 4)
+      const rowY = -29 + index * 56
+      rowsBacking.fillStyle(index === 0 ? theme.goldShadow : index % 2 === 0 ? theme.obsidian : theme.ink, index === 0 ? 0.22 : 0.56)
+      rowsBacking.fillRoundedRect(-268, rowY - 21, 536, 42, 4)
       rowsBacking.lineStyle(1, index === 0 ? theme.agedGold : theme.goldShadow, index === 0 ? 0.52 : 0.26)
-      rowsBacking.strokeRoundedRect(-250, rowY - 19, 500, 38, 4)
+      rowsBacking.strokeRoundedRect(-268, rowY - 21, 536, 42, 4)
       rowsBacking.fillStyle(index === 0 ? theme.brightJade : theme.jade, index === 0 ? 0.24 : 0.12)
-      rowsBacking.fillRect(-239, rowY - 10, 4, 20)
-      rowsBacking.fillRect(235, rowY - 10, 4, 20)
+      rowsBacking.fillRect(-255, rowY - 11, 5, 22)
+      rowsBacking.fillRect(250, rowY - 11, 5, 22)
     })
 
     const rows = this.add
-      .text(-218, -44, this.wallOfChampionsRows(champions), {
+      .text(-230, -48, this.wallOfChampionsRows(champions), {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '30px',
+        fontSize: '32px',
         color: theme.css.ivory,
         stroke: theme.css.ink,
-        strokeThickness: 5,
-        lineSpacing: 14,
+        strokeThickness: 6,
+        lineSpacing: 17,
       })
       .setOrigin(0, 0)
+      .setShadow(0, 2, theme.css.ink, 6, true, true)
     this.wallOfChampionsRowsText = rows
 
     const sideGlyphs = this.add.graphics()
     ;[-1, 1].forEach((side) => {
-      const x = side * 286
+      const x = side * 304
       sideGlyphs.lineStyle(2, theme.goldShadow, 0.54)
-      sideGlyphs.strokeTriangle(x, -31, x + side * 22, -13, x, 5)
-      sideGlyphs.strokeTriangle(x, 21, x + side * 22, 39, x, 57)
+      sideGlyphs.strokeTriangle(x, -31, x + side * 23, -13, x, 5)
+      sideGlyphs.strokeTriangle(x, 27, x + side * 23, 45, x, 63)
       sideGlyphs.fillStyle(theme.jade, 0.2)
-      sideGlyphs.fillCircle(x + side * 9, 84, 6)
+      sideGlyphs.fillCircle(x + side * 9, 91, 6)
     })
 
-    panel.add([stone, title, divider, rowsBacking, rows, sideGlyphs])
+    const revealAccent = this.add.graphics()
+    revealAccent.lineStyle(4, theme.brightJade, 0.72)
+    revealAccent.strokeRoundedRect(-width / 2 + 20, -height / 2 + 20, width - 40, height - 40, 4)
+    revealAccent.fillStyle(theme.ember, 0.7)
+    revealAccent.fillCircle(-width / 2 + 44, height / 2 - 42, 5)
+    revealAccent.fillCircle(width / 2 - 44, height / 2 - 42, 5)
+    revealAccent.setAlpha(0.18)
+    this.wallOfChampionsRevealAccent = revealAccent
+
+    panel.add([stone, title, divider, rowsBacking, rows, sideGlyphs, revealAccent])
     return panel
   }
 
   private wallOfChampionsRows(champions: ChampionEntry[]) {
-    return champions.map((champion, index) => `${index + 1}. ${champion.initials.padEnd(3, ' ')}  ${String(champion.score).padStart(6, ' ')}`).join('\n')
+    return champions
+      .map((champion, index) => `${index + 1}.  ${champion.initials.padEnd(3, ' ')}        ${champion.score.toLocaleString('en-US').padStart(7, ' ')}`)
+      .join('\n')
   }
 
   private updateWallOfChampionsPanel() {
@@ -1006,13 +1031,24 @@ export class PinballScene extends Phaser.Scene {
 
   private createGameOverOverlay() {
     const scrim = this.add
-      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, theme.obsidian, 0.66)
+      .rectangle(tableLayout.table.width / 2, tableLayout.table.height / 2, tableLayout.table.width, tableLayout.table.height, theme.obsidian, 0.76)
       .setDepth(84)
 
-    const plate = this.add
-      .rectangle(tableLayout.table.width / 2, 1020, 720, 420, theme.ink, 0.76)
-      .setStrokeStyle(4, theme.agedGold, 0.64)
+    this.gameOverPlateShadow = this.add
+      .rectangle(tableLayout.table.width / 2 + 10, 1032, 728, 428, theme.ink, 0.72)
       .setDepth(85)
+
+    this.gameOverPlate = this.add
+      .rectangle(tableLayout.table.width / 2, 1020, 720, 420, theme.ink, 0.76)
+      .setStrokeStyle(6, theme.goldShadow, 0.76)
+      .setDepth(85)
+
+    this.gameOverPlateTrim = this.add
+      .rectangle(tableLayout.table.width / 2, 1020, 686, 386, theme.charcoal, 0.22)
+      .setStrokeStyle(2, theme.agedGold, 0.68)
+      .setDepth(85.2)
+
+    this.championCeremonyDecor = this.createChampionCeremonyDecor()
 
     const label = this.add
       .text(tableLayout.table.width / 2, 900, 'GAME OVER', {
@@ -1025,6 +1061,7 @@ export class PinballScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setName('gameOverLabel')
+      .setShadow(0, 3, theme.css.ink, 10, true, true)
       .setDepth(86)
 
     const finalScore = this.add
@@ -1038,6 +1075,7 @@ export class PinballScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setName('gameOverFinalScore')
+      .setShadow(0, 2, theme.css.ink, 8, true, true)
       .setDepth(86)
 
     const highScore = this.add
@@ -1069,60 +1107,130 @@ export class PinballScene extends Phaser.Scene {
     this.initialsEntryPanel = this.createInitialsEntryPanel()
 
     this.gameOverOverlay = this.add
-      .container(0, 0, [scrim, plate, label, finalScore, highScore, prompt, this.initialsEntryPanel])
+      .container(0, 0, [
+        scrim,
+        this.gameOverPlateShadow,
+        this.gameOverPlate,
+        this.gameOverPlateTrim,
+        this.championCeremonyDecor,
+        label,
+        finalScore,
+        highScore,
+        prompt,
+        this.initialsEntryPanel,
+      ])
       .setDepth(84)
       .setVisible(false)
   }
 
+  private createChampionCeremonyDecor() {
+    const width = 820
+    const height = 900
+    const decor = this.add.container(tableLayout.table.width / 2, 1050).setVisible(false)
+    const shadow = this.add.rectangle(12, 14, width, height, theme.ink, 0.82)
+    const stone = this.add.rectangle(0, 0, width, height, theme.ink, 0.96).setStrokeStyle(8, theme.goldShadow, 0.9)
+    const innerStone = this.add.rectangle(0, 0, width - 34, height - 34, theme.charcoal, 0.48).setStrokeStyle(3, theme.agedGold, 0.88)
+    const innerRecess = this.add.rectangle(0, 8, width - 70, height - 78, theme.obsidian, 0.58).setStrokeStyle(2, theme.jade, 0.32)
+    const glyphs = this.add.graphics()
+
+    glyphs.lineStyle(4, theme.goldShadow, 0.74)
+    glyphs.lineBetween(-278, -270, -42, -270)
+    glyphs.lineBetween(42, -270, 278, -270)
+    glyphs.lineStyle(2, theme.brightJade, 0.46)
+    glyphs.lineBetween(-230, -259, -72, -259)
+    glyphs.lineBetween(72, -259, 230, -259)
+    glyphs.fillStyle(theme.ember, 0.9)
+    glyphs.fillCircle(0, -265, 9)
+    glyphs.fillStyle(theme.agedGold, 0.86)
+    glyphs.fillTriangle(-32, -265, -13, -278, -13, -252)
+    glyphs.fillTriangle(32, -265, 13, -278, 13, -252)
+
+    ;[-1, 1].forEach((side) => {
+      const x = side * 365
+      glyphs.lineStyle(3, theme.goldShadow, 0.64)
+      glyphs.lineBetween(x, -330, x, 332)
+      ;[-210, -70, 70, 210].forEach((y, index) => {
+        glyphs.lineStyle(2, index % 2 === 0 ? theme.agedGold : theme.jade, 0.56)
+        glyphs.strokeTriangle(x, y - 24, x + side * 22, y, x, y + 24)
+        glyphs.fillStyle(index === 1 ? theme.ember : theme.jade, index === 1 ? 0.54 : 0.24)
+        glyphs.fillCircle(x + side * 8, y, 5)
+      })
+    })
+
+    glyphs.lineStyle(3, theme.goldShadow, 0.62)
+    glyphs.lineBetween(-278, 362, -36, 362)
+    glyphs.lineBetween(36, 362, 278, 362)
+    glyphs.fillStyle(theme.agedGold, 0.72)
+    glyphs.fillTriangle(-28, 362, -8, 348, -8, 376)
+    glyphs.fillTriangle(28, 362, 8, 348, 8, 376)
+    glyphs.fillStyle(theme.jade, 0.52)
+    glyphs.fillRect(-5, 357, 10, 10)
+
+    decor.add([shadow, stone, innerStone, innerRecess, glyphs])
+    return decor
+  }
+
   private createInitialsEntryPanel() {
-    const panel = this.add.container(tableLayout.table.width / 2, 1138).setDepth(86.5).setVisible(false)
-    const backing = this.add
-      .rectangle(0, 0, 640, 292, theme.ink, 0.82)
-      .setStrokeStyle(5, theme.goldShadow, 0.72)
-    const innerTrim = this.add
-      .rectangle(0, 0, 604, 256, theme.obsidian, 0.46)
-      .setStrokeStyle(2, theme.agedGold, 0.78)
-    const jadeTrim = this.add.rectangle(0, 0, 558, 206, theme.jade, 0).setStrokeStyle(2, theme.jade, 0.34)
+    const panel = this.add.container(tableLayout.table.width / 2, 1110).setDepth(86.5).setVisible(false)
     const title = this.add
-      .text(0, -116, 'CARVE YOUR INITIALS', {
+      .text(0, -186, 'CARVE YOUR INITIALS', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '24px',
+        fontSize: '28px',
         color: theme.css.agedGold,
         stroke: theme.css.ink,
-        strokeThickness: 5,
+        strokeThickness: 6,
         align: 'center',
       })
       .setOrigin(0.5)
+      .setShadow(0, 2, theme.css.ink, 8, true, true)
 
-    panel.add([backing, innerTrim, jadeTrim, title])
+    const titleDivider = this.add.graphics()
+    titleDivider.lineStyle(2, theme.goldShadow, 0.72)
+    titleDivider.lineBetween(-244, -154, 244, -154)
+    titleDivider.lineStyle(1, theme.brightJade, 0.44)
+    titleDivider.lineBetween(-188, -146, 188, -146)
+    titleDivider.fillStyle(theme.ember, 0.72)
+    titleDivider.fillCircle(0, -150, 5)
+
+    this.initialsSelectionMarker = this.add.graphics()
+    this.initialsSelectionMarker.lineStyle(7, theme.brightJade, 0.88)
+    this.initialsSelectionMarker.strokeRoundedRect(-64, -68, 128, 136, 6)
+    this.initialsSelectionMarker.lineStyle(2, theme.ivory, 0.4)
+    this.initialsSelectionMarker.strokeRoundedRect(-57, -61, 114, 122, 4)
+    this.initialsSelectionMarker.fillStyle(theme.jade, 0.78)
+    this.initialsSelectionMarker.fillTriangle(-10, 76, 10, 76, 0, 88)
+    this.initialsSelectionMarker.setPosition(-140, -76)
+
+    panel.add([title, titleDivider, this.initialsSelectionMarker])
     this.initialsSlotBackings = []
     this.initialsSlotTexts = []
 
     ;[-1, 0, 1].forEach((slot, index) => {
-      const x = slot * 106
+      const x = slot * 140
       const slotBacking = this.add
-        .rectangle(x, -48, 82, 78, theme.obsidian, 0.92)
-        .setStrokeStyle(3, theme.goldShadow, 0.68)
+        .rectangle(x, -76, 104, 112, theme.obsidian, 0.96)
+        .setStrokeStyle(4, theme.goldShadow, 0.74)
       const slotText = this.add
-        .text(x, -50, this.championInitials[index], {
+        .text(x, -79, this.championInitials[index], {
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-          fontSize: '48px',
+          fontSize: '58px',
           color: theme.css.ivory,
           stroke: theme.css.ink,
-          strokeThickness: 6,
+          strokeThickness: 7,
           align: 'center',
         })
         .setOrigin(0.5)
+        .setShadow(0, 3, theme.css.ink, 7, true, true)
 
       this.initialsSlotBackings.push(slotBacking)
       this.initialsSlotTexts.push(slotText)
       panel.add([slotBacking, slotText])
     })
 
-    const upButton = this.createInitialsButton('UP', -214, 34, 142, 52, () => this.cycleSelectedInitial(1))
-    const downButton = this.createInitialsButton('DOWN', -72, 34, 142, 52, () => this.cycleSelectedInitial(-1))
-    const nextButton = this.createInitialsButton('NEXT', 166, 34, 176, 52, () => this.moveSelectedInitial(1))
-    const saveButton = this.createInitialsButton('CARVE SCORE', 0, 108, 430, 58, () => this.confirmChampionInitials())
+    const upButton = this.createInitialsButton('UP', -242, 72, 156, 112, () => this.cycleSelectedInitial(1))
+    const downButton = this.createInitialsButton('DOWN', -76, 72, 156, 112, () => this.cycleSelectedInitial(-1))
+    const nextButton = this.createInitialsButton('NEXT', 188, 72, 210, 112, () => this.moveSelectedInitial(1))
+    const saveButton = this.createInitialsButton('CARVE SCORE', 0, 210, 550, 112, () => this.confirmChampionInitials())
 
     this.initialsSaveButtonBacking = saveButton.backing
     this.initialsSaveButtonText = saveButton.text
@@ -1132,25 +1240,49 @@ export class PinballScene extends Phaser.Scene {
 
   private createInitialsButton(label: string, x: number, y: number, width: number, height: number, onPress: () => void) {
     const button = this.add.container(x, y)
-    const backing = this.add.rectangle(0, 0, width, height, theme.obsidian, 0.92).setStrokeStyle(2, theme.agedGold, 0.76)
+    const frame = this.add.graphics()
+    frame.fillStyle(theme.ink, 0.74)
+    frame.fillRoundedRect(-width / 2 + 5, -height / 2 + 9, width, height, 6)
+    frame.fillStyle(theme.goldShadow, 0.86)
+    frame.fillRoundedRect(-width / 2, -height / 2, width, height, 6)
+    frame.fillStyle(theme.charcoal, 1)
+    frame.fillRoundedRect(-width / 2 + 6, -height / 2 + 6, width - 12, height - 12, 4)
+    frame.lineStyle(2, theme.agedGold, 0.9)
+    frame.strokeRoundedRect(-width / 2 + 6, -height / 2 + 6, width - 12, height - 12, 4)
+    frame.lineStyle(2, theme.jade, 0.42)
+    frame.lineBetween(-width / 2 + 18, -height / 2 + 15, -width / 2 + 42, -height / 2 + 15)
+    frame.lineBetween(width / 2 - 42, height / 2 - 15, width / 2 - 18, height / 2 - 15)
+    frame.setAlpha(0.86)
+
+    const backing = this.add.rectangle(0, 0, width - 22, height - 22, theme.obsidian, 0.94).setStrokeStyle(2, theme.goldShadow, 0.66)
     const text = this.add
       .text(0, 0, label, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '22px',
+        fontSize: label === 'CARVE SCORE' ? '27px' : '25px',
         color: theme.css.ivory,
         stroke: theme.css.ink,
-        strokeThickness: 4,
+        strokeThickness: 5,
         align: 'center',
       })
       .setOrigin(0.5)
+      .setShadow(0, 2, theme.css.ink, 5, true, true)
 
-    button.add([backing, text])
+    button.add([frame, backing, text])
     button.setSize(width, height)
     button.setInteractive(new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height), Phaser.Geom.Rectangle.Contains)
     button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation()
+      button.setScale(0.97)
+      frame.setAlpha(1)
+      this.time.delayedCall(90, () => button.setScale(1))
       onPress()
     })
+    button.on('pointerup', () => button.setScale(1))
+    button.on('pointerout', () => {
+      button.setScale(1)
+      frame.setAlpha(0.86)
+    })
+    button.on('pointerover', () => frame.setAlpha(1))
 
     return { button, backing, text }
   }
@@ -1260,14 +1392,19 @@ export class PinballScene extends Phaser.Scene {
 
       text.setText(letter || '_')
       text.setColor(selected ? theme.css.brightJade : theme.css.ivory)
-      backing?.setFillStyle(selected ? theme.jade : theme.obsidian, selected ? 0.3 : 0.92)
-      backing?.setStrokeStyle(selected ? 5 : 3, selected ? theme.brightJade : theme.goldShadow, selected ? 0.94 : 0.68)
+      text.setShadow(0, 3, selected ? theme.css.jade : theme.css.ink, selected ? 12 : 7, true, true)
+      backing?.setFillStyle(selected ? theme.jade : theme.obsidian, selected ? 0.42 : 0.96)
+      backing?.setStrokeStyle(selected ? 5 : 4, selected ? theme.brightJade : theme.goldShadow, selected ? 1 : 0.74)
+      if (selected && backing) {
+        this.initialsSelectionMarker?.setPosition(backing.x, backing.y)
+      }
     })
 
     const ready = this.championInitialsReady()
-    this.initialsSaveButtonBacking?.setFillStyle(ready ? theme.goldShadow : theme.charcoal, ready ? 0.94 : 0.58)
-    this.initialsSaveButtonBacking?.setStrokeStyle(ready ? 3 : 2, ready ? theme.agedGold : theme.goldShadow, ready ? 0.9 : 0.42)
-    this.initialsSaveButtonText?.setAlpha(ready ? 1 : 0.46)
+    this.initialsSelectionMarker?.setAlpha(0.9)
+    this.initialsSaveButtonBacking?.setFillStyle(ready ? theme.goldShadow : theme.charcoal, ready ? 0.96 : 0.58)
+    this.initialsSaveButtonBacking?.setStrokeStyle(ready ? 3 : 2, ready ? theme.agedGold : theme.goldShadow, ready ? 1 : 0.42)
+    this.initialsSaveButtonText?.setAlpha(ready ? 1 : 0.5)
   }
 
   private bindInput() {
@@ -2590,7 +2727,31 @@ export class PinballScene extends Phaser.Scene {
     this.gameOverOverlay?.setVisible(false)
     this.initialsEntryPanel?.setVisible(false)
     this.startOverlay?.setVisible(true)
+    this.revealUpdatedWallOfChampions()
     this.updateHud()
+  }
+
+  private revealUpdatedWallOfChampions() {
+    const startPrompt = this.startOverlay?.getByName('startPrompt') as Phaser.GameObjects.Text | null
+    startPrompt
+      ?.setText('SCORE CARVED\nTap / Press Space to Start')
+      .setFontSize(30)
+      .setLineSpacing(7)
+
+    if (!this.wallOfChampionsRevealAccent) {
+      return
+    }
+
+    this.tweens.killTweensOf(this.wallOfChampionsRevealAccent)
+    this.wallOfChampionsRevealAccent.setAlpha(0.18)
+    this.tweens.add({
+      targets: this.wallOfChampionsRevealAccent,
+      alpha: 0.96,
+      duration: 280,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: 2,
+    })
   }
 
   private updateStartHighScore() {
@@ -2604,18 +2765,45 @@ export class PinballScene extends Phaser.Scene {
     const finalScoreText = this.gameOverOverlay?.getByName('gameOverFinalScore') as Phaser.GameObjects.Text | null
     const highScoreText = this.gameOverOverlay?.getByName('gameOverHighScore') as Phaser.GameObjects.Text | null
     const promptText = this.gameOverOverlay?.getByName('gameOverPrompt') as Phaser.GameObjects.Text | null
-    labelText?.setText(this.awaitingChampionInitials ? 'NEW CHAMPION' : 'GAME OVER')
-    labelText?.setColor(this.awaitingChampionInitials ? theme.css.ember : theme.css.ivory)
-    labelText?.setY(this.awaitingChampionInitials ? 836 : 900)
-    finalScoreText?.setY(this.awaitingChampionInitials ? 928 : 994)
-    finalScoreText?.setText(`FINAL SCORE ${this.score}`)
-    highScoreText?.setVisible(!this.awaitingChampionInitials)
+    const championFlow = this.awaitingChampionInitials
+
+    this.gameOverPlateShadow?.setVisible(!championFlow)
+    this.gameOverPlate?.setVisible(!championFlow)
+    this.gameOverPlateTrim?.setVisible(!championFlow)
+    this.championCeremonyDecor?.setVisible(championFlow)
+
+    labelText
+      ?.setText(championFlow ? 'NEW CHAMPION' : 'GAME OVER')
+      .setColor(championFlow ? theme.css.ember : theme.css.ivory)
+      .setFontSize(championFlow ? 64 : 54)
+      .setY(championFlow ? 710 : 900)
+      .setShadow(0, championFlow ? 0 : 3, championFlow ? theme.css.ember : theme.css.ink, championFlow ? 20 : 10, true, true)
+
+    finalScoreText
+      ?.setY(championFlow ? 838 : 994)
+      .setFontSize(championFlow ? 38 : 28)
+      .setColor(theme.css.agedGold)
+      .setLineSpacing(championFlow ? 8 : 0)
+      .setText(championFlow ? `FINAL SCORE\n${this.score.toLocaleString('en-US')}` : `FINAL SCORE ${this.score.toLocaleString('en-US')}`)
+
+    highScoreText?.setVisible(!championFlow)
     highScoreText?.setText(`HIGH SCORE ${this.highScore}`)
-    promptText?.setY(this.awaitingChampionInitials ? 1324 : 1160)
-    promptText?.setText(this.awaitingChampionInitials ? 'Tap CARVE SCORE or press Enter' : 'Tap / Press Space to Restart')
-    this.initialsEntryPanel?.setVisible(this.awaitingChampionInitials)
-    if (this.awaitingChampionInitials) {
+    promptText
+      ?.setY(championFlow ? 1450 : 1160)
+      .setFontSize(27)
+      .setColor(theme.css.bone)
+      .setText(championFlow ? 'Tap CARVE SCORE or press Enter' : 'Tap / Press Space to Restart')
+    this.initialsEntryPanel?.setVisible(championFlow)
+    if (championFlow) {
       this.updateInitialsEntryUi()
+      this.championCeremonyDecor?.setAlpha(0)
+      this.initialsEntryPanel?.setAlpha(0)
+      this.tweens.add({
+        targets: [this.championCeremonyDecor, this.initialsEntryPanel],
+        alpha: 1,
+        duration: 320,
+        ease: 'Sine.easeOut',
+      })
     }
   }
 
