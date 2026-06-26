@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { tableLayout } from '../config/tableLayout'
-import { loadWallOfChampions } from '../wallOfChampions'
+import { loadWallOfChampions, qualifiesForWallOfChampions, saveTemporaryChampionScore } from '../wallOfChampions'
 import type {
   BumperBody,
   FlipperConfig,
@@ -165,6 +165,9 @@ export class PinballScene extends Phaser.Scene {
   private lastScoreEvent = 'none'
   private highScore = 0
   private champions: ChampionEntry[] = []
+  private wallOfChampionsRowsText?: Phaser.GameObjects.Text
+  private pendingChampionScore: number | null = null
+  private awaitingChampionCarve = false
   private audioContext?: AudioContext
   private lastTrailAt = 0
 
@@ -948,6 +951,7 @@ export class PinballScene extends Phaser.Scene {
         lineSpacing: 14,
       })
       .setOrigin(0, 0)
+    this.wallOfChampionsRowsText = rows
 
     const sideGlyphs = this.add.graphics()
     ;[-1, 1].forEach((side) => {
@@ -965,6 +969,10 @@ export class PinballScene extends Phaser.Scene {
 
   private wallOfChampionsRows(champions: ChampionEntry[]) {
     return champions.map((champion, index) => `${index + 1}. ${champion.initials.padEnd(3, ' ')}  ${String(champion.score).padStart(6, ' ')}`).join('\n')
+  }
+
+  private updateWallOfChampionsPanel() {
+    this.wallOfChampionsRowsText?.setText(this.wallOfChampionsRows(this.champions))
   }
 
   private createPauseOverlay() {
@@ -1008,6 +1016,7 @@ export class PinballScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5)
+      .setName('gameOverLabel')
       .setDepth(86)
 
     const finalScore = this.add
@@ -1046,6 +1055,7 @@ export class PinballScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5)
+      .setName('gameOverPrompt')
       .setDepth(86)
 
     this.gameOverOverlay = this.add.container(0, 0, [scrim, plate, label, finalScore, highScore, prompt]).setDepth(84).setVisible(false)
@@ -1385,6 +1395,11 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private startGame() {
+    if (this.awaitingChampionCarve) {
+      this.confirmTemporaryChampionScore()
+      return
+    }
+
     if (this.gameOver) {
       this.resetGameState()
     }
@@ -1440,6 +1455,8 @@ export class PinballScene extends Phaser.Scene {
     this.score = 0
     this.currentBall = 1
     this.gameOver = false
+    this.pendingChampionScore = null
+    this.awaitingChampionCarve = false
     this.lastScoreEvent = 'none'
     this.gameOverOverlay?.setVisible(false)
     this.startOverlay?.setVisible(false)
@@ -1815,6 +1832,8 @@ export class PinballScene extends Phaser.Scene {
     this.setEclipseState('NORMAL')
     this.resetRollovers()
     this.setBallState('GAME OVER')
+    this.pendingChampionScore = qualifiesForWallOfChampions(this.score, this.champions) ? this.score : null
+    this.awaitingChampionCarve = this.pendingChampionScore !== null
     this.setGameplayFrozen(true)
     this.pauseOverlay?.setVisible(false)
     this.startOverlay?.setVisible(false)
@@ -2335,6 +2354,20 @@ export class PinballScene extends Phaser.Scene {
     window.localStorage.setItem(HIGH_SCORE_KEY, String(this.highScore))
   }
 
+  private confirmTemporaryChampionScore() {
+    if (!this.awaitingChampionCarve || this.pendingChampionScore === null) {
+      return
+    }
+
+    this.champions = saveTemporaryChampionScore(this.pendingChampionScore, this.champions)
+    this.pendingChampionScore = null
+    this.awaitingChampionCarve = false
+    this.updateWallOfChampionsPanel()
+    this.gameOverOverlay?.setVisible(false)
+    this.startOverlay?.setVisible(true)
+    this.updateHud()
+  }
+
   private updateStartHighScore() {
     const highScoreText = this.startOverlay?.getByName('startHighScore') as Phaser.GameObjects.Text | null
     highScoreText?.setText(`HIGH SCORE ${this.highScore}`)
@@ -2342,10 +2375,15 @@ export class PinballScene extends Phaser.Scene {
 
   private updateGameOverOverlay() {
     this.updateStartHighScore()
+    const labelText = this.gameOverOverlay?.getByName('gameOverLabel') as Phaser.GameObjects.Text | null
     const finalScoreText = this.gameOverOverlay?.getByName('gameOverFinalScore') as Phaser.GameObjects.Text | null
     const highScoreText = this.gameOverOverlay?.getByName('gameOverHighScore') as Phaser.GameObjects.Text | null
+    const promptText = this.gameOverOverlay?.getByName('gameOverPrompt') as Phaser.GameObjects.Text | null
+    labelText?.setText(this.awaitingChampionCarve ? 'NEW CHAMPION' : 'GAME OVER')
+    labelText?.setColor(this.awaitingChampionCarve ? theme.css.agedGold : theme.css.ivory)
     finalScoreText?.setText(`FINAL SCORE ${this.score}`)
-    highScoreText?.setText(`HIGH SCORE ${this.highScore}`)
+    highScoreText?.setText(this.awaitingChampionCarve ? 'WALL ENTRY  YOU' : `HIGH SCORE ${this.highScore}`)
+    promptText?.setText(this.awaitingChampionCarve ? 'Tap / Press Space to carve your score' : 'Tap / Press Space to Restart')
   }
 
   private showScorePopup(x: number, y: number, label: string, points?: number, options: ScorePopupOptions = {}) {

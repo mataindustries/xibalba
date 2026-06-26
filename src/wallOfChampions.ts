@@ -11,6 +11,8 @@ export const DEFAULT_CHAMPIONS: ChampionEntry[] = [
   { initials: 'KUK', score: 75000 },
 ]
 
+export const TEMPORARY_CHAMPION_INITIALS = 'YOU'
+
 const CHAMPION_LIMIT = 3
 const INITIALS_LIMIT = 3
 
@@ -41,6 +43,25 @@ export function saveWallOfChampions(entries: readonly ChampionEntry[]): Champion
     writeChampions(storage, champions)
   }
   return champions
+}
+
+export function qualifiesForWallOfChampions(score: number, entries: readonly ChampionEntry[]): boolean {
+  const scoreValue = sanitizeScore(score)
+  if (scoreValue === null) {
+    return false
+  }
+
+  const champions = normalizeChampions(entries)
+  return scoreValue > champions[CHAMPION_LIMIT - 1].score
+}
+
+export function saveTemporaryChampionScore(score: number, entries: readonly ChampionEntry[]): ChampionEntry[] {
+  if (!qualifiesForWallOfChampions(score, entries)) {
+    return normalizeChampions(entries)
+  }
+
+  const scoreValue = sanitizeScore(score) ?? 0
+  return saveWallOfChampions([...entries, { initials: TEMPORARY_CHAMPION_INITIALS, score: scoreValue }])
 }
 
 export function normalizeChampions(entries: unknown): ChampionEntry[] {
@@ -74,6 +95,14 @@ export function sanitizeChampionEntry(entry: unknown): ChampionEntry | null {
     initials,
     score: Math.floor(score),
   }
+}
+
+function sanitizeScore(score: number): number | null {
+  if (!Number.isFinite(score) || score <= 0) {
+    return null
+  }
+
+  return Math.floor(score)
 }
 
 function writeChampions(storage: Storage, entries: readonly ChampionEntry[]): ChampionEntry[] {
