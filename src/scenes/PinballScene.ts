@@ -167,11 +167,14 @@ export class PinballScene extends Phaser.Scene {
   private champions: ChampionEntry[] = []
   private wallOfChampionsPanel?: Phaser.GameObjects.Container
   private wallOfChampionsRowsText?: Phaser.GameObjects.Text
+  private wallOfChampionsEngravingText?: Phaser.GameObjects.Text
   private wallOfChampionsRevealAccent?: Phaser.GameObjects.Graphics
+  private wallRecentEntryAccent?: Phaser.GameObjects.Graphics
   private gameOverPlateShadow?: Phaser.GameObjects.Rectangle
   private gameOverPlate?: Phaser.GameObjects.Rectangle
   private gameOverPlateTrim?: Phaser.GameObjects.Rectangle
   private championCeremonyDecor?: Phaser.GameObjects.Container
+  private championCeremonyGlow?: Phaser.GameObjects.Graphics
   private initialsEntryPanel?: Phaser.GameObjects.Container
   private initialsSelectionMarker?: Phaser.GameObjects.Graphics
   private initialsSlotBackings: Phaser.GameObjects.Rectangle[] = []
@@ -944,11 +947,22 @@ export class PinballScene extends Phaser.Scene {
     divider.lineBetween(-244, -60, 244, -60)
     divider.lineStyle(1, theme.brightJade, 0.38)
     divider.lineBetween(-198, -50, 198, -50)
-    divider.fillStyle(theme.ember, 0.68)
-    divider.fillCircle(0, -56, 6)
+    divider.fillStyle(theme.ember, 0.24)
+    divider.fillCircle(0, -56, 17)
     divider.fillStyle(theme.agedGold, 0.72)
     divider.fillTriangle(-22, -56, -8, -66, -8, -46)
     divider.fillTriangle(22, -56, 8, -66, 8, -46)
+    divider.fillStyle(theme.ink, 0.98)
+    divider.fillCircle(0, -59, 11)
+    divider.fillRect(-7, -57, 14, 12)
+    divider.lineStyle(2, theme.agedGold, 0.82)
+    divider.strokeCircle(0, -59, 11)
+    divider.fillStyle(theme.brightJade, 0.7)
+    divider.fillCircle(-4, -60, 2)
+    divider.fillCircle(4, -60, 2)
+    divider.fillStyle(theme.goldShadow, 0.82)
+    divider.fillRect(-5, -51, 3, 4)
+    divider.fillRect(2, -51, 3, 4)
 
     const rowsBacking = this.add.graphics()
     champions.forEach((_champion, index) => {
@@ -961,6 +975,38 @@ export class PinballScene extends Phaser.Scene {
       rowsBacking.fillRect(-255, rowY - 11, 5, 22)
       rowsBacking.fillRect(250, rowY - 11, 5, 22)
     })
+
+    const topRankAccent = this.add.graphics()
+    topRankAccent.fillStyle(theme.jade, 0.22)
+    topRankAccent.fillRoundedRect(-263, -49, 526, 40, 4)
+    topRankAccent.lineStyle(2, theme.agedGold, 0.78)
+    topRankAccent.strokeRoundedRect(-263, -49, 526, 40, 4)
+    topRankAccent.fillStyle(theme.brightJade, 0.54)
+    topRankAccent.fillTriangle(-252, -29, -244, -36, -244, -22)
+    topRankAccent.fillTriangle(252, -29, 244, -36, 244, -22)
+    topRankAccent.setAlpha(0.18)
+
+    const recentEntryAccent = this.add.graphics()
+    recentEntryAccent.fillStyle(theme.agedGold, 0.24)
+    recentEntryAccent.fillRoundedRect(-263, -20, 526, 40, 4)
+    recentEntryAccent.lineStyle(3, theme.brightJade, 0.94)
+    recentEntryAccent.strokeRoundedRect(-263, -20, 526, 40, 4)
+    recentEntryAccent.fillStyle(theme.ember, 0.78)
+    recentEntryAccent.fillCircle(-250, 0, 4)
+    recentEntryAccent.fillCircle(250, 0, 4)
+    recentEntryAccent.setVisible(false)
+    this.wallRecentEntryAccent = recentEntryAccent
+
+    const engravingRows = this.add
+      .text(-228, -46, this.wallOfChampionsRows(champions), {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '32px',
+        color: theme.css.goldShadow,
+        lineSpacing: 17,
+      })
+      .setOrigin(0, 0)
+      .setAlpha(0.34)
+    this.wallOfChampionsEngravingText = engravingRows
 
     const rows = this.add
       .text(-230, -48, this.wallOfChampionsRows(champions), {
@@ -994,7 +1040,15 @@ export class PinballScene extends Phaser.Scene {
     revealAccent.setAlpha(0.18)
     this.wallOfChampionsRevealAccent = revealAccent
 
-    panel.add([stone, title, divider, rowsBacking, rows, sideGlyphs, revealAccent])
+    panel.add([stone, title, divider, rowsBacking, topRankAccent, recentEntryAccent, engravingRows, rows, sideGlyphs, revealAccent])
+    this.tweens.add({
+      targets: topRankAccent,
+      alpha: 0.38,
+      duration: 1700,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    })
     return panel
   }
 
@@ -1005,7 +1059,9 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private updateWallOfChampionsPanel() {
-    this.wallOfChampionsRowsText?.setText(this.wallOfChampionsRows(this.champions))
+    const rows = this.wallOfChampionsRows(this.champions)
+    this.wallOfChampionsRowsText?.setText(rows)
+    this.wallOfChampionsEngravingText?.setText(rows)
   }
 
   private createPauseOverlay() {
@@ -1131,6 +1187,17 @@ export class PinballScene extends Phaser.Scene {
     const stone = this.add.rectangle(0, 0, width, height, theme.ink, 0.96).setStrokeStyle(8, theme.goldShadow, 0.9)
     const innerStone = this.add.rectangle(0, 0, width - 34, height - 34, theme.charcoal, 0.48).setStrokeStyle(3, theme.agedGold, 0.88)
     const innerRecess = this.add.rectangle(0, 8, width - 70, height - 78, theme.obsidian, 0.58).setStrokeStyle(2, theme.jade, 0.32)
+    const ceremonyGlow = this.add.graphics()
+    ceremonyGlow.lineStyle(5, theme.brightJade, 0.7)
+    ceremonyGlow.strokeRoundedRect(-width / 2 + 27, -height / 2 + 27, width - 54, height - 54, 5)
+    ceremonyGlow.lineStyle(3, theme.agedGold, 0.72)
+    ceremonyGlow.lineBetween(-286, -410, 286, -410)
+    ceremonyGlow.lineBetween(-286, 410, 286, 410)
+    ceremonyGlow.fillStyle(theme.ember, 0.7)
+    ceremonyGlow.fillCircle(-350, -374, 6)
+    ceremonyGlow.fillCircle(350, -374, 6)
+    ceremonyGlow.setAlpha(0.08)
+    this.championCeremonyGlow = ceremonyGlow
     const glyphs = this.add.graphics()
 
     glyphs.lineStyle(4, theme.goldShadow, 0.74)
@@ -1166,7 +1233,7 @@ export class PinballScene extends Phaser.Scene {
     glyphs.fillStyle(theme.jade, 0.52)
     glyphs.fillRect(-5, 357, 10, 10)
 
-    decor.add([shadow, stone, innerStone, innerRecess, glyphs])
+    decor.add([shadow, stone, innerStone, innerRecess, ceremonyGlow, glyphs])
     return decor
   }
 
@@ -1255,6 +1322,10 @@ export class PinballScene extends Phaser.Scene {
     frame.setAlpha(0.86)
 
     const backing = this.add.rectangle(0, 0, width - 22, height - 22, theme.obsidian, 0.94).setStrokeStyle(2, theme.goldShadow, 0.66)
+    const pressFlash = this.add
+      .rectangle(0, 0, width - 28, height - 28, theme.jade, 0.42)
+      .setStrokeStyle(2, theme.brightJade, 0.8)
+      .setAlpha(0)
     const text = this.add
       .text(0, 0, label, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -1267,13 +1338,21 @@ export class PinballScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setShadow(0, 2, theme.css.ink, 5, true, true)
 
-    button.add([frame, backing, text])
+    button.add([frame, backing, pressFlash, text])
     button.setSize(width, height)
     button.setInteractive(new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height), Phaser.Geom.Rectangle.Contains)
     button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation()
-      button.setScale(0.97)
+      button.setScale(0.96)
       frame.setAlpha(1)
+      this.tweens.killTweensOf(pressFlash)
+      pressFlash.setAlpha(0.72)
+      this.tweens.add({
+        targets: pressFlash,
+        alpha: 0,
+        duration: 190,
+        ease: 'Sine.easeOut',
+      })
       this.time.delayedCall(90, () => button.setScale(1))
       onPress()
     })
@@ -1294,6 +1373,18 @@ export class PinballScene extends Phaser.Scene {
     this.championInitialsTouched = [false, false, false]
     this.selectedInitialIndex = 0
     this.updateInitialsEntryUi()
+    if (this.initialsSelectionMarker) {
+      this.tweens.killTweensOf(this.initialsSelectionMarker)
+      this.initialsSelectionMarker.setAlpha(0.68)
+      this.tweens.add({
+        targets: this.initialsSelectionMarker,
+        alpha: 1,
+        duration: 760,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+      })
+    }
   }
 
   private handleInitialsKeyDown(event: KeyboardEvent) {
@@ -1401,7 +1492,6 @@ export class PinballScene extends Phaser.Scene {
     })
 
     const ready = this.championInitialsReady()
-    this.initialsSelectionMarker?.setAlpha(0.9)
     this.initialsSaveButtonBacking?.setFillStyle(ready ? theme.goldShadow : theme.charcoal, ready ? 0.96 : 0.58)
     this.initialsSaveButtonBacking?.setStrokeStyle(ready ? 3 : 2, ready ? theme.agedGold : theme.goldShadow, ready ? 1 : 0.42)
     this.initialsSaveButtonText?.setAlpha(ready ? 1 : 0.5)
@@ -2720,18 +2810,25 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
-    this.champions = saveChampionScore(this.pendingChampionScore, this.championInitials.join(''), this.champions)
+    const carvedScore = this.pendingChampionScore
+    const carvedInitials = this.championInitials.join('')
+    this.champions = saveChampionScore(carvedScore, carvedInitials, this.champions)
+    const carvedRank = this.champions.findIndex((champion) => champion.score === carvedScore && champion.initials === carvedInitials)
     this.pendingChampionScore = null
     this.awaitingChampionInitials = false
+    if (this.initialsSelectionMarker) {
+      this.tweens.killTweensOf(this.initialsSelectionMarker)
+      this.initialsSelectionMarker.setAlpha(0.9)
+    }
     this.updateWallOfChampionsPanel()
     this.gameOverOverlay?.setVisible(false)
     this.initialsEntryPanel?.setVisible(false)
     this.startOverlay?.setVisible(true)
-    this.revealUpdatedWallOfChampions()
+    this.revealUpdatedWallOfChampions(carvedRank)
     this.updateHud()
   }
 
-  private revealUpdatedWallOfChampions() {
+  private revealUpdatedWallOfChampions(carvedRank: number) {
     const startPrompt = this.startOverlay?.getByName('startPrompt') as Phaser.GameObjects.Text | null
     startPrompt
       ?.setText('SCORE CARVED\nTap / Press Space to Start')
@@ -2751,6 +2848,25 @@ export class PinballScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
       yoyo: true,
       repeat: 2,
+    })
+
+    if (!this.wallRecentEntryAccent || carvedRank < 0 || carvedRank >= this.champions.length) {
+      return
+    }
+
+    this.tweens.killTweensOf(this.wallRecentEntryAccent)
+    this.wallRecentEntryAccent
+      .setY(-29 + carvedRank * 56)
+      .setVisible(true)
+      .setAlpha(0)
+    this.tweens.add({
+      targets: this.wallRecentEntryAccent,
+      alpha: 0.84,
+      duration: 320,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: 3,
+      onComplete: () => this.wallRecentEntryAccent?.setVisible(false),
     })
   }
 
@@ -2798,12 +2914,69 @@ export class PinballScene extends Phaser.Scene {
       this.updateInitialsEntryUi()
       this.championCeremonyDecor?.setAlpha(0)
       this.initialsEntryPanel?.setAlpha(0)
+      labelText?.setAlpha(0).setScale(0.92)
+      finalScoreText?.setAlpha(0)
+      promptText?.setAlpha(0)
+      this.championCeremonyGlow?.setAlpha(0.08)
       this.tweens.add({
-        targets: [this.championCeremonyDecor, this.initialsEntryPanel],
+        targets: this.championCeremonyDecor,
         alpha: 1,
-        duration: 320,
+        duration: 380,
         ease: 'Sine.easeOut',
       })
+      if (this.championCeremonyGlow) {
+        this.tweens.killTweensOf(this.championCeremonyGlow)
+        this.tweens.add({
+          targets: this.championCeremonyGlow,
+          alpha: 0.5,
+          duration: 620,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: 2,
+        })
+      }
+      if (labelText) {
+        this.tweens.add({
+          targets: labelText,
+          alpha: 1,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 430,
+          delay: 70,
+          ease: 'Back.easeOut',
+        })
+      }
+      if (finalScoreText) {
+        this.tweens.add({
+          targets: finalScoreText,
+          alpha: 1,
+          duration: 340,
+          delay: 150,
+          ease: 'Sine.easeOut',
+        })
+      }
+      if (this.initialsEntryPanel) {
+        this.tweens.add({
+          targets: this.initialsEntryPanel,
+          alpha: 1,
+          duration: 360,
+          delay: 210,
+          ease: 'Sine.easeOut',
+        })
+      }
+      if (promptText) {
+        this.tweens.add({
+          targets: promptText,
+          alpha: 1,
+          duration: 300,
+          delay: 280,
+          ease: 'Sine.easeOut',
+        })
+      }
+    } else {
+      labelText?.setAlpha(1).setScale(1)
+      finalScoreText?.setAlpha(1)
+      promptText?.setAlpha(1)
     }
   }
 
