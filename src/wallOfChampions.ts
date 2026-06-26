@@ -11,8 +11,6 @@ export const DEFAULT_CHAMPIONS: ChampionEntry[] = [
   { initials: 'KUK', score: 75000 },
 ]
 
-export const TEMPORARY_CHAMPION_INITIALS = 'YOU'
-
 const CHAMPION_LIMIT = 3
 const INITIALS_LIMIT = 3
 
@@ -55,13 +53,14 @@ export function qualifiesForWallOfChampions(score: number, entries: readonly Cha
   return scoreValue > champions[CHAMPION_LIMIT - 1].score
 }
 
-export function saveTemporaryChampionScore(score: number, entries: readonly ChampionEntry[]): ChampionEntry[] {
-  if (!qualifiesForWallOfChampions(score, entries)) {
+export function saveChampionScore(score: number, initials: string, entries: readonly ChampionEntry[]): ChampionEntry[] {
+  const sanitizedInitials = sanitizeInitials(initials)
+  if (!sanitizedInitials || !qualifiesForWallOfChampions(score, entries)) {
     return normalizeChampions(entries)
   }
 
   const scoreValue = sanitizeScore(score) ?? 0
-  return saveWallOfChampions([...entries, { initials: TEMPORARY_CHAMPION_INITIALS, score: scoreValue }])
+  return saveWallOfChampions([...entries, { initials: sanitizedInitials, score: scoreValue }])
 }
 
 export function normalizeChampions(entries: unknown): ChampionEntry[] {
@@ -83,11 +82,10 @@ export function sanitizeChampionEntry(entry: unknown): ChampionEntry | null {
   }
 
   const candidate = entry as { initials?: unknown; score?: unknown }
-  const initials =
-    typeof candidate.initials === 'string' ? candidate.initials.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, INITIALS_LIMIT) : ''
+  const initials = typeof candidate.initials === 'string' ? sanitizeInitials(candidate.initials) : null
   const score = typeof candidate.score === 'number' ? candidate.score : Number.parseInt(String(candidate.score ?? ''), 10)
 
-  if (!initials || !Number.isFinite(score) || score <= 0) {
+  if (initials === null || !Number.isFinite(score) || score <= 0) {
     return null
   }
 
@@ -95,6 +93,11 @@ export function sanitizeChampionEntry(entry: unknown): ChampionEntry | null {
     initials,
     score: Math.floor(score),
   }
+}
+
+export function sanitizeInitials(initials: string): string | null {
+  const sanitized = initials.replace(/[^a-z]/gi, '').toUpperCase().slice(0, INITIALS_LIMIT)
+  return sanitized.length === INITIALS_LIMIT ? sanitized : null
 }
 
 function sanitizeScore(score: number): number | null {

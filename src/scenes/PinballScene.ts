@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { tableLayout } from '../config/tableLayout'
-import { loadWallOfChampions, qualifiesForWallOfChampions, saveTemporaryChampionScore } from '../wallOfChampions'
+import { loadWallOfChampions, qualifiesForWallOfChampions, saveChampionScore } from '../wallOfChampions'
 import type {
   BumperBody,
   FlipperConfig,
@@ -166,8 +166,16 @@ export class PinballScene extends Phaser.Scene {
   private highScore = 0
   private champions: ChampionEntry[] = []
   private wallOfChampionsRowsText?: Phaser.GameObjects.Text
+  private initialsEntryPanel?: Phaser.GameObjects.Container
+  private initialsSlotBackings: Phaser.GameObjects.Rectangle[] = []
+  private initialsSlotTexts: Phaser.GameObjects.Text[] = []
+  private initialsSaveButtonBacking?: Phaser.GameObjects.Rectangle
+  private initialsSaveButtonText?: Phaser.GameObjects.Text
+  private championInitials = ['A', 'A', 'A']
+  private championInitialsTouched = [false, false, false]
+  private selectedInitialIndex = 0
   private pendingChampionScore: number | null = null
-  private awaitingChampionCarve = false
+  private awaitingChampionInitials = false
   private audioContext?: AudioContext
   private lastTrailAt = 0
 
@@ -1058,7 +1066,208 @@ export class PinballScene extends Phaser.Scene {
       .setName('gameOverPrompt')
       .setDepth(86)
 
-    this.gameOverOverlay = this.add.container(0, 0, [scrim, plate, label, finalScore, highScore, prompt]).setDepth(84).setVisible(false)
+    this.initialsEntryPanel = this.createInitialsEntryPanel()
+
+    this.gameOverOverlay = this.add
+      .container(0, 0, [scrim, plate, label, finalScore, highScore, prompt, this.initialsEntryPanel])
+      .setDepth(84)
+      .setVisible(false)
+  }
+
+  private createInitialsEntryPanel() {
+    const panel = this.add.container(tableLayout.table.width / 2, 1138).setDepth(86.5).setVisible(false)
+    const backing = this.add
+      .rectangle(0, 0, 640, 292, theme.ink, 0.82)
+      .setStrokeStyle(5, theme.goldShadow, 0.72)
+    const innerTrim = this.add
+      .rectangle(0, 0, 604, 256, theme.obsidian, 0.46)
+      .setStrokeStyle(2, theme.agedGold, 0.78)
+    const jadeTrim = this.add.rectangle(0, 0, 558, 206, theme.jade, 0).setStrokeStyle(2, theme.jade, 0.34)
+    const title = this.add
+      .text(0, -116, 'CARVE YOUR INITIALS', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '24px',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
+        strokeThickness: 5,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+
+    panel.add([backing, innerTrim, jadeTrim, title])
+    this.initialsSlotBackings = []
+    this.initialsSlotTexts = []
+
+    ;[-1, 0, 1].forEach((slot, index) => {
+      const x = slot * 106
+      const slotBacking = this.add
+        .rectangle(x, -48, 82, 78, theme.obsidian, 0.92)
+        .setStrokeStyle(3, theme.goldShadow, 0.68)
+      const slotText = this.add
+        .text(x, -50, this.championInitials[index], {
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+          fontSize: '48px',
+          color: theme.css.ivory,
+          stroke: theme.css.ink,
+          strokeThickness: 6,
+          align: 'center',
+        })
+        .setOrigin(0.5)
+
+      this.initialsSlotBackings.push(slotBacking)
+      this.initialsSlotTexts.push(slotText)
+      panel.add([slotBacking, slotText])
+    })
+
+    const upButton = this.createInitialsButton('UP', -214, 34, 142, 52, () => this.cycleSelectedInitial(1))
+    const downButton = this.createInitialsButton('DOWN', -72, 34, 142, 52, () => this.cycleSelectedInitial(-1))
+    const nextButton = this.createInitialsButton('NEXT', 166, 34, 176, 52, () => this.moveSelectedInitial(1))
+    const saveButton = this.createInitialsButton('CARVE SCORE', 0, 108, 430, 58, () => this.confirmChampionInitials())
+
+    this.initialsSaveButtonBacking = saveButton.backing
+    this.initialsSaveButtonText = saveButton.text
+    panel.add([upButton.button, downButton.button, nextButton.button, saveButton.button])
+    return panel
+  }
+
+  private createInitialsButton(label: string, x: number, y: number, width: number, height: number, onPress: () => void) {
+    const button = this.add.container(x, y)
+    const backing = this.add.rectangle(0, 0, width, height, theme.obsidian, 0.92).setStrokeStyle(2, theme.agedGold, 0.76)
+    const text = this.add
+      .text(0, 0, label, {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '22px',
+        color: theme.css.ivory,
+        stroke: theme.css.ink,
+        strokeThickness: 4,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+
+    button.add([backing, text])
+    button.setSize(width, height)
+    button.setInteractive(new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height), Phaser.Geom.Rectangle.Contains)
+    button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation()
+      onPress()
+    })
+
+    return { button, backing, text }
+  }
+
+  private beginChampionInitialsEntry(score: number) {
+    this.pendingChampionScore = score
+    this.awaitingChampionInitials = true
+    this.championInitials = ['A', 'A', 'A']
+    this.championInitialsTouched = [false, false, false]
+    this.selectedInitialIndex = 0
+    this.updateInitialsEntryUi()
+  }
+
+  private handleInitialsKeyDown(event: KeyboardEvent) {
+    if (!this.awaitingChampionInitials) {
+      return
+    }
+
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return
+    }
+
+    if (/^[a-z]$/i.test(event.key)) {
+      this.setSelectedInitial(event.key.toUpperCase(), true)
+      event.preventDefault()
+      return
+    }
+
+    switch (event.key) {
+      case 'Backspace':
+        this.deleteSelectedInitial()
+        event.preventDefault()
+        return
+      case 'Enter':
+        this.confirmChampionInitials()
+        event.preventDefault()
+        return
+      case 'ArrowLeft':
+        this.moveSelectedInitial(-1)
+        event.preventDefault()
+        return
+      case 'ArrowRight':
+        this.moveSelectedInitial(1)
+        event.preventDefault()
+        return
+      case 'ArrowUp':
+        this.cycleSelectedInitial(1)
+        event.preventDefault()
+        return
+      case 'ArrowDown':
+        this.cycleSelectedInitial(-1)
+        event.preventDefault()
+        return
+      case ' ':
+      case 'Spacebar':
+        event.preventDefault()
+        return
+    }
+  }
+
+  private setSelectedInitial(letter: string, advance: boolean) {
+    if (!/^[A-Z]$/.test(letter)) {
+      return
+    }
+
+    this.championInitials[this.selectedInitialIndex] = letter
+    this.championInitialsTouched[this.selectedInitialIndex] = true
+    if (advance && this.selectedInitialIndex < this.championInitials.length - 1) {
+      this.selectedInitialIndex += 1
+    }
+    this.updateInitialsEntryUi()
+  }
+
+  private deleteSelectedInitial() {
+    if (this.selectedInitialIndex > 0 && !this.championInitialsTouched[this.selectedInitialIndex]) {
+      this.selectedInitialIndex -= 1
+    }
+
+    this.championInitials[this.selectedInitialIndex] = ''
+    this.championInitialsTouched[this.selectedInitialIndex] = false
+    this.updateInitialsEntryUi()
+  }
+
+  private cycleSelectedInitial(direction: 1 | -1) {
+    const current = this.championInitials[this.selectedInitialIndex] || 'A'
+    const currentIndex = current.charCodeAt(0) - 65
+    const nextIndex = (currentIndex + direction + 26) % 26
+    this.championInitials[this.selectedInitialIndex] = String.fromCharCode(65 + nextIndex)
+    this.championInitialsTouched[this.selectedInitialIndex] = true
+    this.updateInitialsEntryUi()
+  }
+
+  private moveSelectedInitial(direction: 1 | -1) {
+    this.selectedInitialIndex = Phaser.Math.Wrap(this.selectedInitialIndex + direction, 0, this.championInitials.length)
+    this.updateInitialsEntryUi()
+  }
+
+  private championInitialsReady() {
+    return this.championInitials.every((letter) => /^[A-Z]$/.test(letter))
+  }
+
+  private updateInitialsEntryUi() {
+    this.initialsSlotTexts.forEach((text, index) => {
+      const selected = index === this.selectedInitialIndex
+      const letter = this.championInitials[index]
+      const backing = this.initialsSlotBackings[index]
+
+      text.setText(letter || '_')
+      text.setColor(selected ? theme.css.brightJade : theme.css.ivory)
+      backing?.setFillStyle(selected ? theme.jade : theme.obsidian, selected ? 0.3 : 0.92)
+      backing?.setStrokeStyle(selected ? 5 : 3, selected ? theme.brightJade : theme.goldShadow, selected ? 0.94 : 0.68)
+    })
+
+    const ready = this.championInitialsReady()
+    this.initialsSaveButtonBacking?.setFillStyle(ready ? theme.goldShadow : theme.charcoal, ready ? 0.94 : 0.58)
+    this.initialsSaveButtonBacking?.setStrokeStyle(ready ? 3 : 2, ready ? theme.agedGold : theme.goldShadow, ready ? 0.9 : 0.42)
+    this.initialsSaveButtonText?.setAlpha(ready ? 1 : 0.46)
   }
 
   private bindInput() {
@@ -1085,7 +1294,10 @@ export class PinballScene extends Phaser.Scene {
         five: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE),
         multiball: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M),
       }
-      this.input.keyboard.on('keydown', () => this.unlockAudio())
+      this.input.keyboard.on('keydown', (event: KeyboardEvent) => {
+        this.unlockAudio()
+        this.handleInitialsKeyDown(event)
+      })
     }
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.handlePointerDown(pointer))
@@ -1330,6 +1542,11 @@ export class PinballScene extends Phaser.Scene {
 
     const keyboardPlunger = this.keys.plunger.isDown || this.keys.plungerAlt.isDown
 
+    if (this.awaitingChampionInitials) {
+      this.lastKeyboardPlunger = keyboardPlunger
+      return
+    }
+
     if (!this.hasStarted) {
       if (Phaser.Input.Keyboard.JustDown(this.keys.plunger) || Phaser.Input.Keyboard.JustDown(this.keys.plungerAlt)) {
         this.startGame()
@@ -1395,8 +1612,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private startGame() {
-    if (this.awaitingChampionCarve) {
-      this.confirmTemporaryChampionScore()
+    if (this.awaitingChampionInitials) {
       return
     }
 
@@ -1456,7 +1672,7 @@ export class PinballScene extends Phaser.Scene {
     this.currentBall = 1
     this.gameOver = false
     this.pendingChampionScore = null
-    this.awaitingChampionCarve = false
+    this.awaitingChampionInitials = false
     this.lastScoreEvent = 'none'
     this.gameOverOverlay?.setVisible(false)
     this.startOverlay?.setVisible(false)
@@ -1727,6 +1943,10 @@ export class PinballScene extends Phaser.Scene {
 
   private handlePointerDown(pointer: Phaser.Input.Pointer) {
     this.unlockAudio()
+    if (this.awaitingChampionInitials) {
+      return
+    }
+
     if (!this.hasStarted) {
       this.startGame()
       return
@@ -1832,8 +2052,12 @@ export class PinballScene extends Phaser.Scene {
     this.setEclipseState('NORMAL')
     this.resetRollovers()
     this.setBallState('GAME OVER')
-    this.pendingChampionScore = qualifiesForWallOfChampions(this.score, this.champions) ? this.score : null
-    this.awaitingChampionCarve = this.pendingChampionScore !== null
+    if (qualifiesForWallOfChampions(this.score, this.champions)) {
+      this.beginChampionInitialsEntry(this.score)
+    } else {
+      this.pendingChampionScore = null
+      this.awaitingChampionInitials = false
+    }
     this.setGameplayFrozen(true)
     this.pauseOverlay?.setVisible(false)
     this.startOverlay?.setVisible(false)
@@ -2354,16 +2578,17 @@ export class PinballScene extends Phaser.Scene {
     window.localStorage.setItem(HIGH_SCORE_KEY, String(this.highScore))
   }
 
-  private confirmTemporaryChampionScore() {
-    if (!this.awaitingChampionCarve || this.pendingChampionScore === null) {
+  private confirmChampionInitials() {
+    if (!this.awaitingChampionInitials || this.pendingChampionScore === null || !this.championInitialsReady()) {
       return
     }
 
-    this.champions = saveTemporaryChampionScore(this.pendingChampionScore, this.champions)
+    this.champions = saveChampionScore(this.pendingChampionScore, this.championInitials.join(''), this.champions)
     this.pendingChampionScore = null
-    this.awaitingChampionCarve = false
+    this.awaitingChampionInitials = false
     this.updateWallOfChampionsPanel()
     this.gameOverOverlay?.setVisible(false)
+    this.initialsEntryPanel?.setVisible(false)
     this.startOverlay?.setVisible(true)
     this.updateHud()
   }
@@ -2379,11 +2604,19 @@ export class PinballScene extends Phaser.Scene {
     const finalScoreText = this.gameOverOverlay?.getByName('gameOverFinalScore') as Phaser.GameObjects.Text | null
     const highScoreText = this.gameOverOverlay?.getByName('gameOverHighScore') as Phaser.GameObjects.Text | null
     const promptText = this.gameOverOverlay?.getByName('gameOverPrompt') as Phaser.GameObjects.Text | null
-    labelText?.setText(this.awaitingChampionCarve ? 'NEW CHAMPION' : 'GAME OVER')
-    labelText?.setColor(this.awaitingChampionCarve ? theme.css.agedGold : theme.css.ivory)
+    labelText?.setText(this.awaitingChampionInitials ? 'NEW CHAMPION' : 'GAME OVER')
+    labelText?.setColor(this.awaitingChampionInitials ? theme.css.ember : theme.css.ivory)
+    labelText?.setY(this.awaitingChampionInitials ? 836 : 900)
+    finalScoreText?.setY(this.awaitingChampionInitials ? 928 : 994)
     finalScoreText?.setText(`FINAL SCORE ${this.score}`)
-    highScoreText?.setText(this.awaitingChampionCarve ? 'WALL ENTRY  YOU' : `HIGH SCORE ${this.highScore}`)
-    promptText?.setText(this.awaitingChampionCarve ? 'Tap / Press Space to carve your score' : 'Tap / Press Space to Restart')
+    highScoreText?.setVisible(!this.awaitingChampionInitials)
+    highScoreText?.setText(`HIGH SCORE ${this.highScore}`)
+    promptText?.setY(this.awaitingChampionInitials ? 1324 : 1160)
+    promptText?.setText(this.awaitingChampionInitials ? 'Tap CARVE SCORE or press Enter' : 'Tap / Press Space to Restart')
+    this.initialsEntryPanel?.setVisible(this.awaitingChampionInitials)
+    if (this.awaitingChampionInitials) {
+      this.updateInitialsEntryUi()
+    }
   }
 
   private showScorePopup(x: number, y: number, label: string, points?: number, options: ScorePopupOptions = {}) {
