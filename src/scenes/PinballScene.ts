@@ -60,7 +60,9 @@ type ControlKeys = {
 type ComboHitKind = 'bumper' | 'sling' | 'targetOrLane'
 type EclipseState = 'NORMAL' | 'ECLIPSE READY' | 'ECLIPSE MULTIBALL'
 type BallState = 'IN PLAY' | 'PLUNGER' | 'DRAINED' | 'GAME OVER'
-type WallDisplayMode = 'local' | 'loading' | 'global'
+type WallView = 'local' | 'global'
+type GlobalWallState = 'idle' | 'loading' | 'ready' | 'unreachable'
+type WallStatusTone = 'local' | 'global' | 'loading' | 'warning'
 
 type ShotTestPlacement = 'leftFlipper' | 'rightFlipper' | 'centerLower' | 'shooterExit' | 'upperRollovers'
 type ShotTestLaunch = 'leftUpper' | 'rightUpper' | 'centerJackpot'
@@ -73,6 +75,8 @@ type ScorePopupOptions = {
 
 const HIGH_SCORE_KEY = 'xibalba-pinball-high-score'
 const GLOBAL_LEADERBOARD_VERSION = 'g3'
+const GLOBAL_WALL_CACHE_LIMIT = 10
+const WALL_DISPLAY_LIMIT = 3
 const assets = {
   playfield: tableLayout.table.background,
   titleCard: {
@@ -175,6 +179,13 @@ export class PinballScene extends Phaser.Scene {
   private wallOfChampionsRevealAccent?: Phaser.GameObjects.Graphics
   private wallTopRankAccent?: Phaser.GameObjects.Graphics
   private wallRecentEntryAccent?: Phaser.GameObjects.Graphics
+  private wallLocalToggleBacking?: Phaser.GameObjects.Rectangle
+  private wallGlobalToggleBacking?: Phaser.GameObjects.Rectangle
+  private wallLocalToggleText?: Phaser.GameObjects.Text
+  private wallGlobalToggleText?: Phaser.GameObjects.Text
+  private wallView: WallView = 'local'
+  private globalWallState: GlobalWallState = 'idle'
+  private globalChampions: ChampionEntry[] = []
   private globalLeaderboardRequestId = 0
   private gameOverPlateShadow?: Phaser.GameObjects.Rectangle
   private gameOverPlate?: Phaser.GameObjects.Rectangle
@@ -242,7 +253,7 @@ export class PinballScene extends Phaser.Scene {
     this.bindCollisions()
     this.drawRuntimeInsertUnderlays()
     this.setGameplayFrozen(true)
-    void this.loadGlobalLeaderboard().catch(() => this.setWallDisplay('local', this.champions))
+    void this.loadGlobalLeaderboard().catch(() => this.showGlobalWallUnavailable())
   }
 
   update(_time: number, delta: number) {
@@ -962,7 +973,7 @@ export class PinballScene extends Phaser.Scene {
 
   private createWallOfChampionsPanel(champions: ChampionEntry[]) {
     const width = 700
-    const height = 330
+    const height = 400
     const panel = this.add.container(tableLayout.table.width / 2, 1512).setDepth(91)
     const stone = this.add.graphics()
 
@@ -1001,7 +1012,7 @@ export class PinballScene extends Phaser.Scene {
     }
 
     const title = this.add
-      .text(0, -96, 'WALL OF CHAMPIONS', {
+      .text(0, -165, 'WALL OF CHAMPIONS', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '29px',
         color: theme.css.agedGold,
@@ -1011,6 +1022,13 @@ export class PinballScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setShadow(0, 2, theme.css.ink, 8, true, true)
+
+    const localToggle = this.createWallToggleButton('LOCAL', -140, -111, () => this.selectWall('local'))
+    const globalToggle = this.createWallToggleButton('GLOBAL', 140, -111, () => this.selectWall('global'))
+    this.wallLocalToggleBacking = localToggle.backing
+    this.wallGlobalToggleBacking = globalToggle.backing
+    this.wallLocalToggleText = localToggle.text
+    this.wallGlobalToggleText = globalToggle.text
 
     const divider = this.add.graphics()
     divider.lineStyle(3, theme.goldShadow, 0.6)
@@ -1069,7 +1087,7 @@ export class PinballScene extends Phaser.Scene {
     this.wallRecentEntryAccent = recentEntryAccent
 
     const engravingRows = this.add
-      .text(-228, -46, this.wallOfChampionsRows(champions), {
+      .text(-228, -46, this.wallOfChampionsRows(champions, 'local'), {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '32px',
         color: theme.css.goldShadow,
@@ -1080,7 +1098,7 @@ export class PinballScene extends Phaser.Scene {
     this.wallOfChampionsEngravingText = engravingRows
 
     const rows = this.add
-      .text(-230, -48, this.wallOfChampionsRows(champions), {
+      .text(-230, -48, this.wallOfChampionsRows(champions, 'local'), {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '32px',
         color: theme.css.ivory,
@@ -1093,9 +1111,9 @@ export class PinballScene extends Phaser.Scene {
     this.wallOfChampionsRowsText = rows
 
     const status = this.add
-      .text(0, 126, 'LOCAL WALL', {
+      .text(0, 165, 'LOCAL WALL', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '18px',
+        fontSize: '16px',
         color: theme.css.agedGold,
         stroke: theme.css.ink,
         strokeThickness: 4,
@@ -1124,7 +1142,22 @@ export class PinballScene extends Phaser.Scene {
     revealAccent.setAlpha(0.18)
     this.wallOfChampionsRevealAccent = revealAccent
 
-    panel.add([stone, title, divider, rowsBacking, topRankAccent, recentEntryAccent, engravingRows, rows, status, sideGlyphs, revealAccent])
+    panel.add([
+      stone,
+      title,
+      localToggle.button,
+      globalToggle.button,
+      divider,
+      rowsBacking,
+      topRankAccent,
+      recentEntryAccent,
+      engravingRows,
+      rows,
+      status,
+      sideGlyphs,
+      revealAccent,
+    ])
+    this.updateWallToggleControls()
     this.tweens.add({
       targets: topRankAccent,
       alpha: 0.38,
@@ -1136,77 +1169,200 @@ export class PinballScene extends Phaser.Scene {
     return panel
   }
 
-  private wallOfChampionsRows(champions: ChampionEntry[]) {
+  private createWallToggleButton(label: 'LOCAL' | 'GLOBAL', x: number, y: number, onPress: () => void) {
+    const width = 250
+    const height = 64
+    const button = this.add.container(x, y)
+    const frame = this.add.graphics()
+    frame.fillStyle(theme.ink, 0.72)
+    frame.fillRoundedRect(-width / 2 + 4, -height / 2 + 7, width, height, 5)
+    frame.fillStyle(theme.goldShadow, 0.72)
+    frame.fillRoundedRect(-width / 2, -height / 2, width, height, 5)
+    frame.lineStyle(2, theme.agedGold, 0.72)
+    frame.strokeRoundedRect(-width / 2 + 5, -height / 2 + 5, width - 10, height - 10, 3)
+    frame.lineStyle(1, theme.jade, 0.5)
+    frame.lineBetween(-width / 2 + 18, -height / 2 + 12, -width / 2 + 46, -height / 2 + 12)
+    frame.lineBetween(width / 2 - 46, height / 2 - 12, width / 2 - 18, height / 2 - 12)
+    frame.setAlpha(0.78)
+
+    const backing = this.add
+      .rectangle(0, 0, width - 18, height - 18, theme.obsidian, 0.94)
+      .setStrokeStyle(2, theme.goldShadow, 0.64)
+    const text = this.add
+      .text(0, 0, label, {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '20px',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
+        strokeThickness: 4,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+
+    button.add([frame, backing, text])
+    button.setSize(width + 16, height + 16)
+    button.setInteractive(
+      new Phaser.Geom.Rectangle(-(width + 16) / 2, -(height + 16) / 2, width + 16, height + 16),
+      Phaser.Geom.Rectangle.Contains,
+    )
+    button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation()
+      button.setScale(0.97)
+      frame.setAlpha(1)
+      this.time.delayedCall(90, () => button.setScale(1))
+      onPress()
+    })
+    button.on('pointerup', () => button.setScale(1))
+    button.on('pointerover', () => frame.setAlpha(1))
+    button.on('pointerout', () => {
+      button.setScale(1)
+      frame.setAlpha(0.78)
+    })
+
+    return { button, backing, text }
+  }
+
+  private wallOfChampionsRows(champions: ChampionEntry[], view: WallView) {
     if (champions.length === 0) {
-      return '     NO SCORES CARVED'
+      return view === 'global' ? '      AWAITING CHAMPIONS' : '       NO SCORES CARVED'
     }
 
     return champions
+      .slice(0, WALL_DISPLAY_LIMIT)
       .map((champion, index) => `${index + 1}.  ${champion.initials.padEnd(3, ' ')}        ${champion.score.toLocaleString('en-US').padStart(7, ' ')}`)
       .join('\n')
   }
 
-  private updateWallOfChampionsPanel(champions: ChampionEntry[] = this.champions) {
-    const rows = this.wallOfChampionsRows(champions)
+  private updateWallOfChampionsPanel(champions: ChampionEntry[], view: WallView) {
+    const rows = this.wallOfChampionsRows(champions, view)
     this.wallOfChampionsRowsText?.setText(rows)
     this.wallOfChampionsEngravingText?.setText(rows)
     this.wallTopRankAccent?.setVisible(champions.length > 0)
   }
 
+  private selectWall(view: WallView) {
+    if (view === 'local') {
+      this.globalLeaderboardRequestId += 1
+      if (this.globalWallState === 'loading') {
+        this.globalWallState = this.globalChampions.length > 0 ? 'ready' : 'idle'
+      }
+      this.showLocalWall()
+      return
+    }
+
+    if (this.globalWallState !== 'loading') {
+      void this.loadGlobalLeaderboard().catch(() => this.showGlobalWallUnavailable())
+    }
+  }
+
   private async loadGlobalLeaderboard() {
     const requestId = ++this.globalLeaderboardRequestId
-    this.setWallDisplay('loading', this.champions)
+    const showCachedGlobalScores = this.globalWallState === 'ready'
+    this.globalWallState = 'loading'
+    this.wallView = 'global'
+    this.updateWallOfChampionsPanel(showCachedGlobalScores ? this.globalChampions : [], 'global')
+    this.updateWallToggleControls()
+    this.setWallStatus('CONTACTING TEMPLE...', 'loading')
+
     const scores = await fetchGlobalScores()
     if (requestId !== this.globalLeaderboardRequestId) {
       return
     }
 
     if (scores === null) {
-      this.setWallDisplay('local', this.champions)
+      this.showGlobalWallUnavailable()
       return
     }
 
+    this.globalChampions = scores.slice(0, GLOBAL_WALL_CACHE_LIMIT)
+    this.globalWallState = 'ready'
     this.clearRecentWallHighlight()
-    this.setWallDisplay('global', scores.slice(0, 3))
+    this.showGlobalWall()
   }
 
   private async submitChampionGlobally(initials: string, score: number) {
     const requestId = ++this.globalLeaderboardRequestId
-    this.setWallDisplay('loading', this.champions)
+    this.globalWallState = 'loading'
+    this.wallView = 'global'
+    this.updateWallOfChampionsPanel(
+      this.globalChampions.length > 0 ? this.globalChampions : this.champions,
+      this.globalChampions.length > 0 ? 'global' : 'local',
+    )
+    this.updateWallToggleControls()
+    this.setWallStatus('CONTACTING TEMPLE...', 'loading')
+
     const submittedScores = await submitGlobalScore(initials, score, GLOBAL_LEADERBOARD_VERSION)
     if (requestId !== this.globalLeaderboardRequestId) {
       return
     }
 
     if (submittedScores === null) {
-      this.setWallDisplay('local', this.champions)
+      this.showGlobalWallUnavailable(true)
       return
     }
 
-    const displayedScores = submittedScores.slice(0, 3)
+    const refreshedScores = await fetchGlobalScores()
+    if (requestId !== this.globalLeaderboardRequestId) {
+      return
+    }
+
+    this.globalChampions = (refreshedScores ?? submittedScores).slice(0, GLOBAL_WALL_CACHE_LIMIT)
+    this.globalWallState = 'ready'
     this.clearRecentWallHighlight()
-    this.setWallDisplay('global', displayedScores)
+    this.showGlobalWall('SCORE SENT TO GLOBAL WALL')
+    const displayedScores = this.globalChampions.slice(0, WALL_DISPLAY_LIMIT)
     const globalRank = displayedScores.findIndex((champion) => champion.initials === initials && champion.score === score)
     this.highlightWallEntry(globalRank, displayedScores.length)
   }
 
-  private setWallDisplay(mode: WallDisplayMode, champions: ChampionEntry[]) {
-    this.updateWallOfChampionsPanel(champions)
+  private showLocalWall(status = 'LOCAL WALL', tone: WallStatusTone = 'local') {
+    this.wallView = 'local'
+    this.updateWallOfChampionsPanel(this.champions, 'local')
+    this.updateWallToggleControls()
+    this.setWallStatus(status, tone)
+  }
 
-    const status = this.wallOfChampionsStatusText
-    if (!status) {
-      return
+  private showGlobalWall(status = 'GLOBAL WALL') {
+    this.wallView = 'global'
+    this.updateWallOfChampionsPanel(this.globalChampions, 'global')
+    this.updateWallToggleControls()
+    this.setWallStatus(status, 'global')
+  }
+
+  private showGlobalWallUnavailable(savedLocally = false) {
+    this.globalWallState = 'unreachable'
+    this.showLocalWall(
+      savedLocally ? 'SAVED LOCALLY  •  GLOBAL WALL UNREACHABLE' : 'GLOBAL WALL UNREACHABLE  •  LOCAL WALL ACTIVE',
+      'warning',
+    )
+  }
+
+  private setWallStatus(message: string, tone: WallStatusTone) {
+    const statusColors: Record<WallStatusTone, string> = {
+      local: theme.css.agedGold,
+      global: theme.css.brightJade,
+      loading: theme.css.bone,
+      warning: theme.css.agedGold,
     }
+    this.wallOfChampionsStatusText
+      ?.setText(message)
+      .setFontSize(message.length > 30 ? 14 : 16)
+      .setColor(statusColors[tone])
+      .setAlpha(tone === 'loading' ? 0.72 : tone === 'warning' ? 0.82 : 0.94)
+  }
 
-    if (mode === 'loading') {
-      status.setText('CONTACTING TEMPLE...').setColor(theme.css.bone).setAlpha(0.7)
-      return
-    }
+  private updateWallToggleControls() {
+    const localActive = this.wallView === 'local'
+    const globalActive = this.wallView === 'global'
 
-    status
-      .setText(mode === 'global' ? 'GLOBAL WALL' : 'LOCAL WALL')
-      .setColor(mode === 'global' ? theme.css.brightJade : theme.css.agedGold)
-      .setAlpha(mode === 'global' ? 0.96 : 0.88)
+    this.wallLocalToggleBacking
+      ?.setFillStyle(localActive ? theme.goldShadow : theme.obsidian, localActive ? 0.88 : 0.94)
+      .setStrokeStyle(localActive ? 3 : 2, localActive ? theme.agedGold : theme.goldShadow, localActive ? 0.94 : 0.54)
+    this.wallGlobalToggleBacking
+      ?.setFillStyle(globalActive ? theme.jade : theme.obsidian, globalActive ? 0.68 : 0.94)
+      .setStrokeStyle(globalActive ? 3 : 2, globalActive ? theme.brightJade : theme.goldShadow, globalActive ? 0.94 : 0.54)
+    this.wallLocalToggleText?.setColor(localActive ? theme.css.ivory : theme.css.goldShadow).setAlpha(localActive ? 1 : 0.76)
+    this.wallGlobalToggleText?.setColor(globalActive ? theme.css.ivory : theme.css.goldShadow).setAlpha(globalActive ? 1 : 0.76)
   }
 
   private clearRecentWallHighlight() {
@@ -2930,13 +3086,13 @@ export class PinballScene extends Phaser.Scene {
       this.tweens.killTweensOf(this.initialsSelectionMarker)
       this.initialsSelectionMarker.setAlpha(0.9)
     }
-    this.setWallDisplay('local', this.champions)
+    this.showLocalWall('SAVED LOCALLY')
     this.gameOverOverlay?.setVisible(false)
     this.initialsEntryPanel?.setVisible(false)
     this.startOverlay?.setVisible(true)
     this.revealUpdatedWallOfChampions(carvedRank)
     this.updateHud()
-    void this.submitChampionGlobally(carvedInitials, carvedScore).catch(() => this.setWallDisplay('local', this.champions))
+    void this.submitChampionGlobally(carvedInitials, carvedScore).catch(() => this.showGlobalWallUnavailable(true))
   }
 
   private revealUpdatedWallOfChampions(carvedRank: number) {
