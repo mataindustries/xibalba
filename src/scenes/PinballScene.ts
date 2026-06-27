@@ -72,7 +72,7 @@ type ScorePopupOptions = {
 }
 
 const HIGH_SCORE_KEY = 'xibalba-pinball-high-score'
-const GLOBAL_LEADERBOARD_VERSION = 'g2'
+const GLOBAL_LEADERBOARD_VERSION = 'g3'
 const assets = {
   playfield: tableLayout.table.background,
   titleCard: {
@@ -1183,13 +1183,7 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
-    const refreshedScores = await fetchGlobalScores()
-    if (requestId !== this.globalLeaderboardRequestId) {
-      return
-    }
-
-    const globalScores = refreshedScores ?? submittedScores
-    const displayedScores = globalScores.slice(0, 3)
+    const displayedScores = submittedScores.slice(0, 3)
     this.clearRecentWallHighlight()
     this.setWallDisplay('global', displayedScores)
     const globalRank = displayedScores.findIndex((champion) => champion.initials === initials && champion.score === score)

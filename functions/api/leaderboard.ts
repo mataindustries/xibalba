@@ -1,12 +1,16 @@
 const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 25
-const MAX_SCORE = 999_999_999
+export const MAX_REASONABLE_SCORE = 999_999_999
 const MAX_BODY_LENGTH = 2048
 const MAX_VERSION_LENGTH = 32
+const DUPLICATE_COOLDOWN_SECONDS = 60 * 60
 
 interface D1Result<T = unknown> {
   success: boolean
   results?: T[]
+  meta?: {
+    changes?: number
+  }
 }
 
 interface D1PreparedStatement {
@@ -40,9 +44,23 @@ type ScoreSubmission = {
   version?: string
 }
 
+type ErrorCode =
+  | 'body_required'
+  | 'body_too_large'
+  | 'cross_origin_submission'
+  | 'database_unavailable'
+  | 'invalid_body'
+  | 'invalid_content_type'
+  | 'invalid_initials'
+  | 'invalid_json'
+  | 'invalid_score'
+  | 'invalid_version'
+  | 'leaderboard_unavailable'
+  | 'score_save_failed'
+
 type ValidationResult =
   | { ok: true; submission: ScoreSubmission }
-  | { ok: false; error: string }
+  | { ok: false; error: ErrorCode }
 
 const JSON_HEADERS = {
   'Cache-Control': 'no-store',
@@ -52,28 +70,31 @@ const JSON_HEADERS = {
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if (!hasDatabase(env)) {
-    return errorResponse(503, 'Leaderboard database is not configured.')
+    return errorResponse(503, 'database_unavailable')
   }
 
   try {
     const limit = parseLimit(new URL(request.url).searchParams.get('limit'))
-    return jsonResponse({ ok: true, scores: await loadTopScores(env.DB, limit) })
+    return jsonResponse({ ok: true, scores: await loadTopScores(env.DB, limit), source: 'global' })
   } catch {
-    return errorResponse(500, 'Leaderboard is temporarily unavailable.')
+    return errorResponse(500, 'leaderboard_unavailable')
   }
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!isSameOriginRequest(request)) {
-    return errorResponse(403, 'Cross-origin submissions are not allowed.')
+    return errorResponse(403, 'cross_origin_submission')
   }
   if (!hasDatabase(env)) {
-    return errorResponse(503, 'Leaderboard database is not configured.')
+    return errorResponse(503, 'database_unavailable')
+  }
+  if (!hasJsonContentType(request)) {
+    return errorResponse(415, 'invalid_content_type')
   }
 
   const body = await readJsonBody(request)
   if (!body.ok) {
-    return errorResponse(400, body.error)
+    return errorResponse(body.error === 'body_too_large' ? 413 : 400, body.error)
   }
 
   const validation = validateScoreSubmission(body.value)
@@ -83,20 +104,42 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   try {
     const { initials, score, version } = validation.submission
+    const createdAt = Math.floor(Date.now() / 1000)
+    const duplicateSince = createdAt - DUPLICATE_COOLDOWN_SECONDS
+
+    if (await hasRecentDuplicate(env.DB, initials, score, duplicateSince)) {
+      return jsonResponse({
+        ok: true,
+        duplicate: true,
+        scores: await loadTopScores(env.DB, DEFAULT_LIMIT),
+        source: 'global',
+      })
+    }
+
     const insert = await env.DB.prepare(
       `INSERT INTO scores (initials, score, created_at, source, version)
-       VALUES (?, ?, ?, ?, ?)`,
+       SELECT ?, ?, ?, ?, ?
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM scores
+         WHERE initials = ? AND score = ? AND created_at >= ?
+       )`,
     )
-      .bind(initials, score, Math.floor(Date.now() / 1000), 'pages', version ?? null)
+      .bind(initials, score, createdAt, 'pages', version ?? null, initials, score, duplicateSince)
       .run()
 
     if (!insert.success) {
       throw new Error('D1 insert failed')
     }
 
-    return jsonResponse({ ok: true, scores: await loadTopScores(env.DB, DEFAULT_LIMIT) }, 201)
+    const scores = await loadTopScores(env.DB, DEFAULT_LIMIT)
+    if (insert.meta?.changes === 0) {
+      return jsonResponse({ ok: true, duplicate: true, scores, source: 'global' })
+    }
+
+    return jsonResponse({ ok: true, scores, source: 'global' }, 201)
   } catch {
-    return errorResponse(500, 'Score could not be saved.')
+    return errorResponse(500, 'score_save_failed')
   }
 }
 
@@ -121,28 +164,28 @@ export function sanitizeInitials(value: unknown): string | null {
 }
 
 export function sanitizeScore(value: unknown): number | null {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_SCORE ? value : null
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_REASONABLE_SCORE ? value : null
 }
 
 export function validateScoreSubmission(value: unknown): ValidationResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return { ok: false, error: 'Request body must be a JSON object.' }
+    return { ok: false, error: 'invalid_body' }
   }
 
   const candidate = value as Record<string, unknown>
   const initials = sanitizeInitials(candidate.initials)
   if (!initials) {
-    return { ok: false, error: 'Initials must contain exactly three letters A-Z.' }
+    return { ok: false, error: 'invalid_initials' }
   }
 
   const score = sanitizeScore(candidate.score)
   if (score === null) {
-    return { ok: false, error: `Score must be a positive integer no greater than ${MAX_SCORE}.` }
+    return { ok: false, error: 'invalid_score' }
   }
 
   const version = sanitizeVersion(candidate.version)
   if (version === null) {
-    return { ok: false, error: `Version must use safe characters and be at most ${MAX_VERSION_LENGTH} characters.` }
+    return { ok: false, error: 'invalid_version' }
   }
 
   return {
@@ -176,21 +219,39 @@ function sanitizeVersion(value: unknown): string | null | undefined {
   return version.length > 0 && version.length <= MAX_VERSION_LENGTH && /^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(version) ? version : null
 }
 
-async function readJsonBody(request: Request): Promise<{ ok: true; value: unknown } | { ok: false; error: string }> {
+async function readJsonBody(request: Request): Promise<{ ok: true; value: unknown } | { ok: false; error: ErrorCode }> {
   const contentLength = Number.parseInt(request.headers.get('Content-Length') ?? '0', 10)
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_LENGTH) {
-    return { ok: false, error: 'Request body is too large.' }
+    return { ok: false, error: 'body_too_large' }
   }
 
   try {
     const text = await request.text()
     if (!text || text.length > MAX_BODY_LENGTH) {
-      return { ok: false, error: text ? 'Request body is too large.' : 'Request body is required.' }
+      return { ok: false, error: text ? 'body_too_large' : 'body_required' }
     }
     return { ok: true, value: JSON.parse(text) }
   } catch {
-    return { ok: false, error: 'Request body must be valid JSON.' }
+    return { ok: false, error: 'invalid_json' }
   }
+}
+
+async function hasRecentDuplicate(database: D1Database, initials: string, score: number, duplicateSince: number): Promise<boolean> {
+  const result = await database
+    .prepare(
+      `SELECT id
+       FROM scores
+       WHERE initials = ? AND score = ? AND created_at >= ?
+       LIMIT 1`,
+    )
+    .bind(initials, score, duplicateSince)
+    .all<{ id: number }>()
+
+  if (!result.success) {
+    throw new Error('D1 duplicate query failed')
+  }
+
+  return (result.results?.length ?? 0) > 0
 }
 
 async function loadTopScores(database: D1Database, limit: number): Promise<ScoreRow[]> {
@@ -228,6 +289,10 @@ function isSameOriginRequest(request: Request): boolean {
   }
 }
 
+function hasJsonContentType(request: Request): boolean {
+  return request.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() === 'application/json'
+}
+
 function hasDatabase(env: Env): env is Env & { DB: D1Database } {
   return Boolean(env?.DB && typeof env.DB.prepare === 'function')
 }
@@ -239,6 +304,6 @@ function jsonResponse(payload: unknown, status = 200): Response {
   })
 }
 
-function errorResponse(status: number, error: string): Response {
+function errorResponse(status: number, error: ErrorCode): Response {
   return jsonResponse({ ok: false, error }, status)
 }
