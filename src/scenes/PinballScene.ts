@@ -132,6 +132,7 @@ export class PinballScene extends Phaser.Scene {
   private rolloverText!: Phaser.GameObjects.Text
   private controlsText!: Phaser.GameObjects.Text
   private devModeText!: Phaser.GameObjects.Text
+  private startDevHint?: Phaser.GameObjects.Text
   private visualAlignmentText!: Phaser.GameObjects.Text
   private shotTestText!: Phaser.GameObjects.Text
   private startOverlay!: Phaser.GameObjects.Container
@@ -954,10 +955,10 @@ export class PinballScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(91)
 
-    const dev = this.add
-      .text(tableLayout.table.width / 2, 1292, '` or F1 toggles dev tools', {
+    this.startDevHint = this.add
+      .text(tableLayout.table.width / 2, 1292, 'DEV MODE  •  B COLLISIONS  •  T SHOT TEST  •  M MULTIBALL', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '18px',
+        fontSize: '16px',
         color: theme.css.goldShadow,
         stroke: theme.css.ink,
         strokeThickness: 3,
@@ -965,10 +966,13 @@ export class PinballScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(91)
+      .setVisible(false)
 
     this.wallOfChampionsPanel = this.createWallOfChampionsPanel(this.champions)
 
-    this.startOverlay = this.add.container(0, 0, [titleArt, textPlate, high, prompt, controls, dev, this.wallOfChampionsPanel]).setDepth(90)
+    this.startOverlay = this.add
+      .container(0, 0, [titleArt, textPlate, high, prompt, controls, this.startDevHint, this.wallOfChampionsPanel])
+      .setDepth(90)
   }
 
   private createWallOfChampionsPanel(champions: ChampionEntry[]) {
@@ -2141,6 +2145,7 @@ export class PinballScene extends Phaser.Scene {
   private setDevMode(enabled: boolean) {
     this.devModeEnabled = enabled
     this.devModeText.setVisible(enabled)
+    this.startDevHint?.setVisible(enabled)
     this.visualAlignmentText.setVisible(enabled)
     if (!enabled) {
       this.debugEnabled = false
