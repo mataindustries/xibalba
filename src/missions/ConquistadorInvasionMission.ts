@@ -7,6 +7,7 @@ export type MissionResult = 'success' | 'failed' | null
 export type ConquistadorInvasionConfig = {
   durationMs: number
   requiredTargetCount: number
+  requiredShipCount: number
   shipTargetCount: number
   invaderTargetCount: number
   startingDurationMs: number
@@ -20,8 +21,9 @@ export type ConquistadorInvasionHooks = {
 }
 
 export const CONQUISTADOR_INVASION_CONFIG: ConquistadorInvasionConfig = {
-  durationMs: 25_000,
-  requiredTargetCount: 10,
+  durationMs: 30_000,
+  requiredTargetCount: 8,
+  requiredShipCount: 2,
   shipTargetCount: 3,
   invaderTargetCount: 9,
   startingDurationMs: 1_200,
@@ -99,7 +101,7 @@ export class ConquistadorInvasionMission {
     this.hooks.onTargetDestroyed?.(type, this.destroyedTargetCount)
 
     if (
-      this.destroyedShipCount >= this.config.shipTargetCount ||
+      this.destroyedShipCount >= this.config.requiredShipCount &&
       this.destroyedTargetCount >= this.config.requiredTargetCount
     ) {
       this.result = 'success'
@@ -113,10 +115,20 @@ export class ConquistadorInvasionMission {
       return false
     }
 
-    this.destroyedShipCount = this.config.shipTargetCount
-    this.destroyedTargetCount = Math.max(this.destroyedTargetCount, this.config.shipTargetCount)
+    this.destroyedShipCount = this.config.requiredShipCount
+    this.destroyedTargetCount = Math.max(this.destroyedTargetCount, this.config.requiredTargetCount)
     this.result = 'success'
     this.transitionTo('success')
+    return true
+  }
+
+  forceFailureForDev() {
+    if (this.state !== 'starting' && this.state !== 'active') {
+      return false
+    }
+
+    this.result = 'failed'
+    this.transitionTo('failed')
     return true
   }
 

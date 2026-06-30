@@ -68,6 +68,7 @@ type ControlKeys = {
   testMode: Phaser.Input.Keyboard.Key
   clearVelocity: Phaser.Input.Keyboard.Key
   shift: Phaser.Input.Keyboard.Key
+  alt: Phaser.Input.Keyboard.Key
   one: Phaser.Input.Keyboard.Key
   two: Phaser.Input.Keyboard.Key
   three: Phaser.Input.Keyboard.Key
@@ -821,7 +822,7 @@ export class PinballScene extends Phaser.Scene {
       .setAlpha(0.96)
 
     this.devModeText = this.add
-      .text(tableLayout.table.width - 24, 112, 'DEV MODE  •  I INVASION  •  SHIFT+I CLEAR', {
+      .text(tableLayout.table.width - 24, 112, 'DEV  •  I START  •  SHIFT+I WIN  •  ALT+I FAIL', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
         color: theme.css.ember,
@@ -901,7 +902,8 @@ export class PinballScene extends Phaser.Scene {
     this.missionTimerText = this.add
       .text(0, 28, '', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '24px',
+        fontSize: '28px',
+        fontStyle: 'bold',
         color: theme.css.ivory,
         stroke: theme.css.ink,
         strokeThickness: 5,
@@ -935,7 +937,7 @@ export class PinballScene extends Phaser.Scene {
         this.missionTimerText,
         this.missionProgressText,
       ])
-      .setDepth(48)
+      .setDepth(9.7)
       .setVisible(false)
   }
 
@@ -1955,6 +1957,7 @@ export class PinballScene extends Phaser.Scene {
         testMode: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T),
         clearVelocity: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C),
         shift: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
+        alt: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT),
         one: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
         two: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
         three: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
@@ -2215,7 +2218,12 @@ export class PinballScene extends Phaser.Scene {
     }
 
     if (this.devModeEnabled && Phaser.Input.Keyboard.JustDown(this.keys.invasion)) {
-      if (this.keys.shift.isDown) {
+      if (this.keys.alt.isDown) {
+        if (this.mission.state !== 'starting' && this.mission.state !== 'active') {
+          this.mission.forceStartForDev()
+        }
+        this.mission.forceFailureForDev()
+      } else if (this.keys.shift.isDown) {
         if (this.mission.state !== 'starting' && this.mission.state !== 'active') {
           this.mission.forceStartForDev()
         }
@@ -2426,13 +2434,12 @@ export class PinballScene extends Phaser.Scene {
         break
       case 'active': {
         const secondsRemaining = Math.ceil(this.mission.remainingMs / 1000)
-        const totalTargets = this.mission.config.shipTargetCount + this.mission.config.invaderTargetCount
         const shipsRemaining = this.mission.config.shipTargetCount - this.mission.destroyedShipCount
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
           'ORB OF JUDGMENT',
           `TIME ${secondsRemaining.toString().padStart(2, '0')}`,
-          `SHIPS LEFT ${shipsRemaining}   INVADERS ${this.mission.destroyedInvaderCount}/${this.mission.config.invaderTargetCount}   TARGETS ${this.mission.destroyedTargetCount}/${totalTargets}\nDESTROY ALL SHIPS OR ${this.mission.config.requiredTargetCount} TOTAL`,
+          `SHIPS ${this.mission.destroyedShipCount}/${this.mission.config.requiredShipCount}   LEFT ${shipsRemaining}   TARGETS ${this.mission.destroyedTargetCount}/${this.mission.config.requiredTargetCount}\nINVADERS ${this.mission.destroyedInvaderCount}/${this.mission.config.invaderTargetCount}   COMPLETE BOTH OBJECTIVES`,
           theme.agedGold,
         )
         this.missionTimerText.setColor(secondsRemaining <= 5 ? theme.css.ember : theme.css.ivory)
@@ -2452,7 +2459,7 @@ export class PinballScene extends Phaser.Scene {
           'CONQUISTADOR INVASION',
           'TEMPLE BREACHED',
           'THE PORTAL COLLAPSES',
-          `${this.mission.destroyedTargetCount}/${this.mission.config.requiredTargetCount} REQUIRED TARGETS`,
+          `SHIPS ${this.mission.destroyedShipCount}/${this.mission.config.requiredShipCount}   TARGETS ${this.mission.destroyedTargetCount}/${this.mission.config.requiredTargetCount}`,
           theme.ember,
         )
         break
