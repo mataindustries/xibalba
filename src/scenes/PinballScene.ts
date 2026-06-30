@@ -164,7 +164,14 @@ export class PinballScene extends Phaser.Scene {
   private missionProgressText!: Phaser.GameObjects.Text
   private missionTargets: MissionTargetRuntime[] = []
   private missionTransientEffects = new Set<Phaser.GameObjects.GameObject>()
+  private missionBattlefieldOverlay?: Phaser.GameObjects.Container
+  private missionBattlefieldTint?: Phaser.GameObjects.Rectangle
+  private missionPortalVisual?: Phaser.GameObjects.Container
+  private missionOrbAuras = new Map<number, Phaser.GameObjects.Arc>()
+  private missionOrbTrails = new Set<Phaser.GameObjects.Arc>()
   private lastMissionTargetDestroyedAt = -Infinity
+  private lastMissionOrbTrailAt = 0
+  private lastMissionUrgencySecond = -1
   private missionDestroyCombo = 0
   private startOverlay!: Phaser.GameObjects.Container
   private gameOverOverlay!: Phaser.GameObjects.Container
@@ -304,6 +311,7 @@ export class PinballScene extends Phaser.Scene {
     this.mission.update(delta)
     this.updateMissionTargets()
     this.updateMissionUi()
+    this.updateMissionPresentation()
     this.updateFlippers(delta)
     this.updatePlunger()
     this.maybeAssistShooterExit()
@@ -2333,7 +2341,8 @@ export class PinballScene extends Phaser.Scene {
         })
         break
       case 'starting':
-        this.flashPlayfield(theme.agedGold)
+        this.startMissionCinematic()
+        this.audio.playMissionStart()
         this.showScorePopup(tableLayout.table.width / 2, 520, 'CONQUISTADOR INVASION', undefined, {
           major: true,
           event: true,
@@ -2341,9 +2350,9 @@ export class PinballScene extends Phaser.Scene {
         })
         break
       case 'active':
+        this.activateMissionBattlefield()
+        this.fadeMissionPortal()
         this.spawnMissionTargets()
-        this.audio.playMissionStart()
-        this.ceremonialBurst(tableLayout.table.width / 2, 520, theme.agedGold)
         this.showScorePopup(tableLayout.table.width / 2, 520, 'ORB OF JUDGMENT', undefined, {
           major: true,
           event: true,
@@ -2352,10 +2361,9 @@ export class PinballScene extends Phaser.Scene {
         break
       case 'success':
         this.fadeRemainingMissionTargets()
+        this.presentMissionResult(true)
         this.audio.playMissionSuccess()
         this.addScore(INVASION_CLEAR_BONUS)
-        this.flashPlayfield(theme.jade)
-        this.ceremonialBurst(tableLayout.table.width / 2, 560, theme.brightJade)
         this.showScorePopup(tableLayout.table.width / 2, 520, 'INVASION REPULSED', undefined, {
           major: true,
           event: true,
@@ -2368,8 +2376,8 @@ export class PinballScene extends Phaser.Scene {
         break
       case 'failed':
         this.fadeRemainingMissionTargets()
+        this.presentMissionResult(false)
         this.audio.playMissionFailure()
-        this.flashPlayfield(theme.eclipseRed)
         this.showScorePopup(tableLayout.table.width / 2, 520, 'TEMPLE BREACHED', undefined, {
           major: true,
           event: true,
@@ -2378,9 +2386,11 @@ export class PinballScene extends Phaser.Scene {
         break
       case 'inactive':
         this.clearMissionTargets()
+        this.clearMissionPresentation()
         break
       case 'ending':
         this.clearMissionTargets()
+        this.fadeMissionPresentation()
         break
     }
   }
@@ -2425,6 +2435,7 @@ export class PinballScene extends Phaser.Scene {
           `SHIPS LEFT ${shipsRemaining}   INVADERS ${this.mission.destroyedInvaderCount}/${this.mission.config.invaderTargetCount}   TARGETS ${this.mission.destroyedTargetCount}/${totalTargets}\nDESTROY ALL SHIPS OR ${this.mission.config.requiredTargetCount} TOTAL`,
           theme.agedGold,
         )
+        this.missionTimerText.setColor(secondsRemaining <= 5 ? theme.css.ember : theme.css.ivory)
         break
       }
       case 'success':
@@ -2457,19 +2468,407 @@ export class PinballScene extends Phaser.Scene {
   private setMissionUiContent(title: string, status: string, timer: string, progress: string, accentColor: number) {
     this.missionTitleText.setText(title)
     this.missionStatusText.setText(status).setColor(Phaser.Display.Color.IntegerToColor(accentColor).rgba)
-    this.missionTimerText.setText(timer)
+    this.missionTimerText.setText(timer).setColor(theme.css.ivory)
     this.missionProgressText.setText(progress)
     this.missionUiBacking.setStrokeStyle(4, accentColor, 0.92)
     this.missionUiTrim.setStrokeStyle(2, accentColor, 0.58)
   }
 
+  private startMissionCinematic() {
+    this.clearMissionPresentation()
+    this.createMissionBattlefieldOverlay()
+    this.createMissionPortalVisual()
+    this.lastMissionUrgencySecond = -1
+
+    this.tweens.killTweensOf(this.missionUi)
+    this.missionUi.setAlpha(0.2).setScale(0.9)
+    this.tweens.add({
+      targets: this.missionUi,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 420,
+      ease: 'Back.easeOut',
+    })
+  }
+
+  private createMissionBattlefieldOverlay() {
+    if (this.missionBattlefieldOverlay?.active) {
+      return
+    }
+
+    this.missionBattlefieldTint = this.add.rectangle(
+      tableLayout.table.width / 2,
+      tableLayout.table.height / 2,
+      tableLayout.table.width,
+      tableLayout.table.height,
+      theme.obsidian,
+      0.24,
+    )
+    const eclipseHaze = this.add.ellipse(540, 660, 920, 850, theme.eclipseRed, 0.055)
+    const emberHazeLeft = this.add.ellipse(190, 980, 390, 780, theme.ember, 0.025)
+    const emberHazeRight = this.add.ellipse(865, 920, 360, 720, theme.ember, 0.022)
+    const banners = this.add.graphics()
+    banners.lineStyle(5, theme.goldShadow, 0.22)
+    banners.lineBetween(120, 520, 120, 1370)
+    banners.lineBetween(892, 500, 892, 1340)
+    banners.fillStyle(theme.eclipseRed, 0.14)
+    banners.fillTriangle(124, 555, 124, 775, 250, 650)
+    banners.fillTriangle(888, 535, 888, 755, 762, 635)
+    banners.lineStyle(2, theme.agedGold, 0.18)
+    banners.strokeTriangle(124, 555, 124, 775, 250, 650)
+    banners.strokeTriangle(888, 535, 888, 755, 762, 635)
+
+    const smokeWisps = [
+      this.add.ellipse(230, 1120, 310, 90, theme.charcoal, 0.09),
+      this.add.ellipse(520, 1270, 430, 110, theme.eclipseRed, 0.045),
+      this.add.ellipse(805, 1080, 280, 82, theme.charcoal, 0.085),
+    ]
+
+    this.missionBattlefieldOverlay = this.add
+      .container(0, 0, [
+        this.missionBattlefieldTint,
+        eclipseHaze,
+        emberHazeLeft,
+        emberHazeRight,
+        banners,
+        ...smokeWisps,
+      ])
+      .setDepth(3)
+      .setAlpha(0)
+
+    smokeWisps.forEach((smoke, index) => {
+      this.tweens.add({
+        targets: smoke,
+        x: smoke.x + (index % 2 === 0 ? 34 : -28),
+        y: smoke.y - 24,
+        alpha: smoke.alpha * 0.58,
+        duration: 3_800 + index * 620,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    })
+    this.tweens.add({
+      targets: this.missionBattlefieldOverlay,
+      alpha: 1,
+      duration: 320,
+      ease: 'Sine.easeOut',
+    })
+  }
+
+  private createMissionPortalVisual() {
+    this.clearMissionPortal()
+
+    const rays = this.add.graphics()
+    rays.lineStyle(4, theme.agedGold, 0.48)
+    for (let index = 0; index < 12; index += 1) {
+      const angle = (Math.PI * 2 * index) / 12
+      rays.lineBetween(Math.cos(angle) * 76, Math.sin(angle) * 76, Math.cos(angle) * 112, Math.sin(angle) * 112)
+    }
+
+    const outerJade = this.add
+      .circle(0, 0, 86, theme.jade, 0.055)
+      .setStrokeStyle(7, theme.brightJade, 0.76)
+    const emberRing = this.add
+      .circle(0, 0, 61, theme.eclipseRed, 0.13)
+      .setStrokeStyle(5, theme.ember, 0.82)
+    const eclipseCore = this.add
+      .circle(0, 0, 39, theme.ink, 0.96)
+      .setStrokeStyle(3, theme.agedGold, 0.9)
+    const glyph = this.add
+      .triangle(0, 1, 0, -21, 18, 15, -18, 15, theme.brightJade, 0.72)
+      .setStrokeStyle(2, theme.ivory, 0.62)
+    const orbCore = this.add.circle(0, 0, 8, theme.ivory, 0.96).setStrokeStyle(3, theme.agedGold, 0.92)
+
+    this.missionPortalVisual = this.add
+      .container(540, 385, [rays, outerJade, emberRing, eclipseCore, glyph, orbCore])
+      .setDepth(8.8)
+      .setScale(0.46)
+      .setAlpha(0)
+
+    this.tweens.add({
+      targets: this.missionPortalVisual,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 360,
+      ease: 'Back.easeOut',
+    })
+    this.tweens.add({
+      targets: outerJade,
+      alpha: 0.18,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+    this.tweens.add({
+      targets: emberRing,
+      angle: -180,
+      scaleX: 0.9,
+      scaleY: 0.9,
+      duration: 880,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+    this.tweens.add({
+      targets: rays,
+      angle: 90,
+      duration: 1_200,
+      ease: 'Sine.easeInOut',
+    })
+  }
+
+  private activateMissionBattlefield() {
+    this.missionBattlefieldTint?.setFillStyle(theme.obsidian, 0.17)
+    this.missionBattlefieldOverlay?.setAlpha(1)
+    this.missionUi.setAlpha(1).setScale(1)
+    this.lastMissionUrgencySecond = -1
+  }
+
+  private fadeMissionPortal() {
+    const portal = this.missionPortalVisual
+    if (!portal?.active) {
+      return
+    }
+
+    this.killMissionContainerTweens(portal)
+    this.tweens.add({
+      targets: portal,
+      alpha: 0,
+      scaleX: 1.38,
+      scaleY: 1.38,
+      duration: 380,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        if (this.missionPortalVisual === portal) {
+          this.missionPortalVisual = undefined
+        }
+        portal.destroy()
+      },
+    })
+  }
+
+  private updateMissionPresentation() {
+    if (!this.mission.missionActive) {
+      return
+    }
+
+    this.updateMissionOrbPresentation()
+    const secondsRemaining = Math.ceil(this.mission.remainingMs / 1000)
+    if (secondsRemaining > 0 && secondsRemaining <= 5 && secondsRemaining !== this.lastMissionUrgencySecond) {
+      this.lastMissionUrgencySecond = secondsRemaining
+      this.audio.playMissionUrgency()
+      this.tweens.killTweensOf(this.missionTimerText)
+      this.missionTimerText.setScale(1.16)
+      this.tweens.add({
+        targets: this.missionTimerText,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 180,
+        ease: 'Sine.easeOut',
+      })
+    }
+  }
+
+  private updateMissionOrbPresentation() {
+    const activeBallIds = new Set(this.balls.map((ball) => ball.id))
+    this.balls.forEach((ball) => {
+      let aura = this.missionOrbAuras.get(ball.id)
+      if (!aura?.active) {
+        aura = this.add
+          .circle(ball.image.x, ball.image.y, tableLayout.ball.radius * 1.48, theme.jade, 0.055)
+          .setStrokeStyle(3, theme.agedGold, 0.56)
+          .setDepth(9.5)
+        this.missionOrbAuras.set(ball.id, aura)
+      }
+
+      const phase = this.time.now * 0.006 + ball.id
+      aura.setPosition(ball.image.x, ball.image.y)
+      aura.setAlpha(0.34 + Math.sin(phase) * 0.1)
+      aura.setScale(0.98 + Math.sin(phase) * 0.035)
+    })
+
+    this.missionOrbAuras.forEach((aura, ballId) => {
+      if (!activeBallIds.has(ballId)) {
+        this.tweens.killTweensOf(aura)
+        aura.destroy()
+        this.missionOrbAuras.delete(ballId)
+      }
+    })
+
+    if (this.time.now - this.lastMissionOrbTrailAt < 92) {
+      return
+    }
+
+    this.lastMissionOrbTrailAt = this.time.now
+    this.balls.forEach((ball) => {
+      const trail = this.add
+        .circle(ball.image.x, ball.image.y, tableLayout.ball.radius * 0.76, theme.brightJade, 0.13)
+        .setStrokeStyle(1, theme.agedGold, 0.24)
+        .setDepth(9.25)
+      this.missionOrbTrails.add(trail)
+      this.tweens.add({
+        targets: trail,
+        scaleX: 0.28,
+        scaleY: 0.28,
+        alpha: 0,
+        duration: 250,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          this.missionOrbTrails.delete(trail)
+          trail.destroy()
+        },
+      })
+    })
+  }
+
+  private presentMissionResult(success: boolean) {
+    this.clearMissionOrbPresentation()
+    this.fadeMissionPortal()
+    this.lastMissionUrgencySecond = -1
+    this.missionBattlefieldTint?.setFillStyle(success ? theme.jade : theme.obsidian, success ? 0.12 : 0.34)
+
+    const wash = this.add
+      .rectangle(
+        tableLayout.table.width / 2,
+        tableLayout.table.height / 2,
+        tableLayout.table.width,
+        tableLayout.table.height,
+        success ? theme.jade : theme.eclipseRed,
+        success ? 0.15 : 0.13,
+      )
+      .setDepth(8)
+    const templePulse = this.add
+      .circle(540, 385, success ? 76 : 64, success ? theme.brightJade : theme.ember, 0.08)
+      .setStrokeStyle(success ? 7 : 5, success ? theme.agedGold : theme.eclipseRed, 0.92)
+      .setDepth(9)
+    this.missionTransientEffects.add(wash)
+    this.missionTransientEffects.add(templePulse)
+
+    this.tweens.add({
+      targets: wash,
+      alpha: 0,
+      duration: success ? 920 : 720,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.missionTransientEffects.delete(wash)
+        wash.destroy()
+      },
+    })
+    this.tweens.add({
+      targets: templePulse,
+      scaleX: success ? 3.2 : 2.5,
+      scaleY: success ? 3.2 : 2.5,
+      alpha: 0,
+      duration: success ? 880 : 680,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.missionTransientEffects.delete(templePulse)
+        templePulse.destroy()
+      },
+    })
+    this.pulse(this.missionUi, success ? 1.055 : 1.035, success ? 150 : 110)
+  }
+
+  private fadeMissionPresentation() {
+    this.clearMissionOrbPresentation()
+    this.fadeMissionPortal()
+    const overlay = this.missionBattlefieldOverlay
+    if (!overlay?.active) {
+      return
+    }
+
+    this.killMissionContainerTweens(overlay)
+    this.tweens.add({
+      targets: overlay,
+      alpha: 0,
+      duration: 620,
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        if (this.missionBattlefieldOverlay === overlay) {
+          this.missionBattlefieldOverlay = undefined
+          this.missionBattlefieldTint = undefined
+        }
+        overlay.destroy()
+      },
+    })
+  }
+
+  private clearMissionPresentation() {
+    this.clearMissionOrbPresentation()
+    this.clearMissionPortal()
+    const overlay = this.missionBattlefieldOverlay
+    if (overlay) {
+      this.killMissionContainerTweens(overlay)
+      if (overlay.active) {
+        overlay.destroy()
+      }
+    }
+    this.missionBattlefieldOverlay = undefined
+    this.missionBattlefieldTint = undefined
+    this.lastMissionUrgencySecond = -1
+    this.tweens.killTweensOf(this.missionUi)
+    this.missionUi?.setAlpha(1).setScale(1)
+  }
+
+  private clearMissionPortal() {
+    const portal = this.missionPortalVisual
+    if (portal) {
+      this.killMissionContainerTweens(portal)
+      if (portal.active) {
+        portal.destroy()
+      }
+    }
+    this.missionPortalVisual = undefined
+  }
+
+  private clearMissionOrbPresentation() {
+    this.missionOrbAuras.forEach((aura) => {
+      this.tweens.killTweensOf(aura)
+      if (aura.active) {
+        aura.destroy()
+      }
+    })
+    this.missionOrbTrails.forEach((trail) => {
+      this.tweens.killTweensOf(trail)
+      if (trail.active) {
+        trail.destroy()
+      }
+    })
+    this.missionOrbAuras.clear()
+    this.missionOrbTrails.clear()
+    this.lastMissionOrbTrailAt = 0
+  }
+
+  private killMissionContainerTweens(container: Phaser.GameObjects.Container) {
+    this.tweens.killTweensOf(container)
+    container.each((child: Phaser.GameObjects.GameObject) => this.tweens.killTweensOf(child))
+  }
+
   private spawnMissionTargets() {
     this.clearMissionTargets()
-    this.missionTargets = CONQUISTADOR_INVASION_TARGETS.map((definition) => ({
-      definition,
-      visual: this.createMissionTargetVisual(definition),
-      alive: true,
-    }))
+    this.missionTargets = CONQUISTADOR_INVASION_TARGETS.map((definition, index) => {
+      const visual = this.createMissionTargetVisual(definition).setAlpha(0).setScale(0.72)
+      this.tweens.add({
+        targets: visual,
+        alpha: 1,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 260,
+        delay: index * 28,
+        ease: 'Back.easeOut',
+      })
+      return {
+        definition,
+        visual,
+        alive: true,
+      }
+    })
   }
 
   private createMissionTargetVisual(definition: Readonly<InvasionTargetDefinition>) {
@@ -2483,13 +2882,18 @@ export class PinballScene extends Phaser.Scene {
 
   private createMissionShipVisual(hitRadius: number) {
     const aura = this.add
-      .ellipse(0, 5, hitRadius * 2.25, hitRadius * 1.42, theme.ember, 0.1)
-      .setStrokeStyle(3, theme.agedGold, 0.68)
+      .ellipse(0, 5, hitRadius * 2.3, hitRadius * 1.5, theme.ember, 0.11)
+      .setStrokeStyle(4, theme.agedGold, 0.78)
+    const targetRing = this.add
+      .ellipse(0, 5, hitRadius * 1.82, hitRadius * 1.12, theme.ink, 0)
+      .setStrokeStyle(2, theme.brightJade, 0.46)
     const silhouette = this.add.graphics()
     silhouette.fillStyle(theme.obsidian, 0.96)
     silhouette.lineStyle(4, theme.goldShadow, 0.94)
-    silhouette.fillTriangle(-58, 14, 58, 14, 38, 34)
-    silhouette.strokeTriangle(-58, 14, 58, 14, 38, 34)
+    silhouette.fillTriangle(-61, 13, 61, 13, 15, 35)
+    silhouette.strokeTriangle(-61, 13, 61, 13, 15, 35)
+    silhouette.lineStyle(3, theme.agedGold, 0.86)
+    silhouette.lineBetween(-48, 10, 50, 10)
     silhouette.fillRect(-4, -45, 8, 62)
     silhouette.fillStyle(theme.charcoal, 0.98)
     silhouette.lineStyle(3, theme.agedGold, 0.9)
@@ -2503,14 +2907,37 @@ export class PinballScene extends Phaser.Scene {
     silhouette.strokeTriangle(5, -45, 5, -29, 30, -39)
     silhouette.fillStyle(theme.agedGold, 0.9)
     silhouette.fillCircle(0, 15, 5)
+    silhouette.fillStyle(theme.brightJade, 0.84)
+    silhouette.fillCircle(-41, 18, 3)
+    silhouette.fillCircle(41, 18, 3)
+    const label = this.add
+      .text(0, 48, 'SHIP', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '12px',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
+        strokeThickness: 4,
+        letterSpacing: 2,
+      })
+      .setOrigin(0.5)
 
-    return this.add.container(0, 0, [aura, silhouette])
+    return this.add.container(0, 0, [aura, targetRing, silhouette, label])
   }
 
   private createMissionInvaderVisual(hitRadius: number) {
     const aura = this.add
-      .circle(0, 2, hitRadius * 1.08, theme.ember, 0.09)
-      .setStrokeStyle(3, theme.goldShadow, 0.72)
+      .circle(0, 2, hitRadius * 1.15, theme.ember, 0.105)
+      .setStrokeStyle(3, theme.agedGold, 0.8)
+    const targetRing = this.add
+      .circle(0, 2, hitRadius * 0.92, theme.ink, 0)
+      .setStrokeStyle(2, theme.brightJade, 0.4)
+    const banner = this.add.graphics()
+    banner.lineStyle(3, theme.goldShadow, 0.86)
+    banner.lineBetween(-25, -34, -25, 31)
+    banner.fillStyle(theme.eclipseRed, 0.88)
+    banner.fillTriangle(-23, -32, -23, -10, -6, -21)
+    banner.lineStyle(2, theme.ember, 0.82)
+    banner.strokeTriangle(-23, -32, -23, -10, -6, -21)
     const silhouette = this.add.graphics()
     silhouette.fillStyle(theme.obsidian, 0.97)
     silhouette.lineStyle(3, theme.agedGold, 0.9)
@@ -2532,8 +2959,11 @@ export class PinballScene extends Phaser.Scene {
     silhouette.fillStyle(theme.brightJade, 0.82)
     silhouette.fillCircle(-5, -10, 2)
     silhouette.fillCircle(5, -10, 2)
+    const footing = this.add
+      .rectangle(0, 43, 34, 3, theme.brightJade, 0.68)
+      .setStrokeStyle(1, theme.agedGold, 0.64)
 
-    return this.add.container(0, 0, [aura, silhouette])
+    return this.add.container(0, 0, [aura, targetRing, banner, silhouette, footing])
   }
 
   private updateMissionTargets() {
@@ -2592,14 +3022,8 @@ export class PinballScene extends Phaser.Scene {
       this.audio.playMissionTargetDestroyed()
     }
 
-    this.flashCircle(
-      target.definition.x,
-      target.definition.y,
-      target.definition.hitRadius * 0.82,
-      theme.ember,
-      tableLayout.juice.flashDurationMs,
-    )
     this.createMissionDestructionPulse(target.definition.x, target.definition.y, target.definition.hitRadius)
+    this.createMissionDestructionShards(target.definition)
     this.tweens.killTweensOf(target.visual)
     this.tweens.add({
       targets: target.visual,
@@ -2622,17 +3046,35 @@ export class PinballScene extends Phaser.Scene {
         comboBonus,
         { color: theme.css.ember },
       )
+      this.pulse(this.missionUi, 1.025, 90)
     }
 
     this.mission.registerTargetDestroyed(target.definition.type)
   }
 
   private createMissionDestructionPulse(x: number, y: number, radius: number) {
+    const emberFlash = this.add
+      .circle(x, y, radius * 0.8, theme.ember, 0.24)
+      .setStrokeStyle(3, theme.eclipseRed, 0.82)
+      .setDepth(9.05)
     const pulse = this.add
       .circle(x, y, radius * 0.72, theme.jade, 0.14)
       .setStrokeStyle(4, theme.agedGold, 0.9)
       .setDepth(9)
+    this.missionTransientEffects.add(emberFlash)
     this.missionTransientEffects.add(pulse)
+    this.tweens.add({
+      targets: emberFlash,
+      scaleX: 1.34,
+      scaleY: 1.34,
+      alpha: 0,
+      duration: 190,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.missionTransientEffects.delete(emberFlash)
+        emberFlash.destroy()
+      },
+    })
     this.tweens.add({
       targets: pulse,
       scaleX: 1.9,
@@ -2645,6 +3087,39 @@ export class PinballScene extends Phaser.Scene {
         pulse.destroy()
       },
     })
+  }
+
+  private createMissionDestructionShards(definition: Readonly<InvasionTargetDefinition>) {
+    const shardCount = definition.type === 'ship' ? 3 : 2
+    for (let index = 0; index < shardCount; index += 1) {
+      const angle = -2.55 + index * 1.15
+      const travel = definition.type === 'ship' ? 74 : 48
+      const shard = this.add
+        .rectangle(
+          definition.x,
+          definition.y,
+          definition.type === 'ship' ? 13 : 9,
+          definition.type === 'ship' ? 5 : 4,
+          index % 2 === 0 ? theme.agedGold : theme.ember,
+          0.92,
+        )
+        .setDepth(9.2)
+        .setRotation(angle)
+      this.missionTransientEffects.add(shard)
+      this.tweens.add({
+        targets: shard,
+        x: definition.x + Math.cos(angle) * travel,
+        y: definition.y + Math.sin(angle) * travel + 18,
+        angle: Phaser.Math.RadToDeg(angle) + (index % 2 === 0 ? 110 : -90),
+        alpha: 0,
+        duration: definition.type === 'ship' ? 430 : 340,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.missionTransientEffects.delete(shard)
+          shard.destroy()
+        },
+      })
+    }
   }
 
   private fadeRemainingMissionTargets() {
@@ -3105,6 +3580,12 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private removeBall(ball: BallRuntime) {
+    const missionAura = this.missionOrbAuras.get(ball.id)
+    if (missionAura) {
+      this.tweens.killTweensOf(missionAura)
+      missionAura.destroy()
+      this.missionOrbAuras.delete(ball.id)
+    }
     this.collisionBodies = this.collisionBodies.filter((body) => body !== ball.body)
     this.balls = this.balls.filter((item) => item !== ball)
     ball.image.destroy()
@@ -3893,7 +4374,11 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private updateMultiballTrail() {
-    if (this.eclipseState !== 'ECLIPSE MULTIBALL' || this.time.now - this.lastTrailAt < tableLayout.juice.trailIntervalMs) {
+    if (
+      this.mission.missionActive ||
+      this.eclipseState !== 'ECLIPSE MULTIBALL' ||
+      this.time.now - this.lastTrailAt < tableLayout.juice.trailIntervalMs
+    ) {
       return
     }
 

@@ -145,6 +145,11 @@ const RECIPES = {
     tone(110, 310, 0.06, { type: 'triangle', endFrequency: 52, delayMs: 130 }),
     tone(55, 430, 0.055, { type: 'sine', endFrequency: 30, delayMs: 270 }),
   ],
+  missionUrgency: [
+    noise(28, 0.028, 1450, { q: 1.4 }),
+    tone(880, 72, 0.024, { type: 'triangle', endFrequency: 660 }),
+    tone(1760, 54, 0.012, { type: 'sine', delayMs: 26 }),
+  ],
   drain: [
     noise(150, 0.07, 290, { filterType: 'lowpass' }),
     tone(128, 280, 0.09, { type: 'sawtooth', endFrequency: 46 }),
@@ -286,6 +291,10 @@ export class XibalbaAudioManager {
 
   playMissionFailure() {
     this.play('missionFailure', 1000, 3)
+  }
+
+  playMissionUrgency() {
+    this.play('missionUrgency', 760, 1)
   }
 
   playDrain() {
