@@ -6,8 +6,16 @@ import {
   CONQUISTADOR_INVASION_CONFIG,
   ConquistadorInvasionMission,
 } from '../missions/ConquistadorInvasionMission'
+import {
+  CONQUISTADOR_INVASION_TARGETS,
+  INVASION_CLEAR_BONUS,
+  INVASION_COMBO_MAX,
+  INVASION_COMBO_STEP_SCORE,
+  INVASION_COMBO_WINDOW_MS,
+} from '../missions/ConquistadorInvasionTargets'
 import { loadWallOfChampions, qualifiesForWallOfChampions, saveChampionScore } from '../wallOfChampions'
 import type { MissionState } from '../missions/ConquistadorInvasionMission'
+import type { InvasionTargetDefinition } from '../missions/ConquistadorInvasionTargets'
 import type {
   BumperBody,
   FlipperConfig,
@@ -37,6 +45,12 @@ type BallRuntime = {
   body: MatterJS.BodyType
   lastMotionAt: number
   lastDrainAt: number
+}
+
+type MissionTargetRuntime = {
+  definition: Readonly<InvasionTargetDefinition>
+  visual: Phaser.GameObjects.Container
+  alive: boolean
 }
 
 type ControlKeys = {
@@ -148,6 +162,10 @@ export class PinballScene extends Phaser.Scene {
   private missionStatusText!: Phaser.GameObjects.Text
   private missionTimerText!: Phaser.GameObjects.Text
   private missionProgressText!: Phaser.GameObjects.Text
+  private missionTargets: MissionTargetRuntime[] = []
+  private missionTransientEffects = new Set<Phaser.GameObjects.GameObject>()
+  private lastMissionTargetDestroyedAt = -Infinity
+  private missionDestroyCombo = 0
   private startOverlay!: Phaser.GameObjects.Container
   private gameOverOverlay!: Phaser.GameObjects.Container
   private pauseOverlay!: Phaser.GameObjects.Container
@@ -284,6 +302,7 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.mission.update(delta)
+    this.updateMissionTargets()
     this.updateMissionUi()
     this.updateFlippers(delta)
     this.updatePlunger()
@@ -794,7 +813,7 @@ export class PinballScene extends Phaser.Scene {
       .setAlpha(0.96)
 
     this.devModeText = this.add
-      .text(tableLayout.table.width - 24, 112, 'DEV MODE  •  I INVASION', {
+      .text(tableLayout.table.width - 24, 112, 'DEV MODE  •  I INVASION  •  SHIFT+I CLEAR', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
         color: theme.css.ember,
@@ -834,7 +853,7 @@ export class PinballScene extends Phaser.Scene {
 
   private createMissionUi() {
     const panelWidth = 680
-    const panelHeight = 170
+    const panelHeight = 194
     const shadow = this.add.rectangle(8, 10, panelWidth + 18, panelHeight + 18, theme.ink, 0.62)
     this.missionUiBacking = this.add
       .rectangle(0, 0, panelWidth, panelHeight, theme.obsidian, 0.94)
@@ -889,6 +908,8 @@ export class PinballScene extends Phaser.Scene {
         stroke: theme.css.ink,
         strokeThickness: 4,
         letterSpacing: 1,
+        align: 'center',
+        lineSpacing: 3,
       })
       .setOrigin(0.5)
 
@@ -2055,7 +2076,7 @@ export class PinballScene extends Phaser.Scene {
       const points = bumper?.score ?? 1000
       this.audio.playBumper()
       this.shakeCamera('bumper')
-      this.addScore(points, 'bumper')
+      this.addScore(points)
       this.showScorePopup(otherBody.position.x, otherBody.position.y - 28, 'BUMPER HIT', points)
       if (bumper) {
         this.pulseBumperVisual(bumper)
@@ -2070,7 +2091,7 @@ export class PinballScene extends Phaser.Scene {
       const sling = tableLayout.slingshots.find((item) => label === `sling:${item.id}`)
       if (sling) {
         this.audio.playSling()
-        this.addScore(sling.score, 'sling')
+        this.addScore(sling.score)
         this.showScorePopup(otherBody.position.x, otherBody.position.y - 22, 'SLING HIT', sling.score)
         this.pulse(this.slingVisuals.get(sling.id))
         this.applyBallForce(ball, sling.force.x * tableLayout.tuning.slingForceScale, sling.force.y * tableLayout.tuning.slingForceScale)
@@ -2084,7 +2105,7 @@ export class PinballScene extends Phaser.Scene {
       const target = tableLayout.sensors.find((sensor) => sensor.id === targetId)
       const points = target?.score ?? 250
       this.audio.playTarget()
-      this.addScore(points, 'target')
+      this.addScore(points)
       this.showScorePopup(ball.image.x, ball.image.y - 28, 'TARGET HIT', points)
       this.registerComboHit('targetOrLane', ball)
       return
@@ -2186,7 +2207,14 @@ export class PinballScene extends Phaser.Scene {
     }
 
     if (this.devModeEnabled && Phaser.Input.Keyboard.JustDown(this.keys.invasion)) {
-      this.mission.forceStartForDev()
+      if (this.keys.shift.isDown) {
+        if (this.mission.state !== 'starting' && this.mission.state !== 'active') {
+          this.mission.forceStartForDev()
+        }
+        this.mission.forceSuccessForDev()
+      } else {
+        this.mission.forceStartForDev()
+      }
     }
 
     if (this.devModeEnabled && this.shotTestMode) {
@@ -2313,6 +2341,8 @@ export class PinballScene extends Phaser.Scene {
         })
         break
       case 'active':
+        this.spawnMissionTargets()
+        this.audio.playMissionStart()
         this.ceremonialBurst(tableLayout.table.width / 2, 520, theme.agedGold)
         this.showScorePopup(tableLayout.table.width / 2, 520, 'ORB OF JUDGMENT', undefined, {
           major: true,
@@ -2321,14 +2351,24 @@ export class PinballScene extends Phaser.Scene {
         })
         break
       case 'success':
+        this.fadeRemainingMissionTargets()
+        this.audio.playMissionSuccess()
+        this.addScore(INVASION_CLEAR_BONUS)
         this.flashPlayfield(theme.jade)
+        this.ceremonialBurst(tableLayout.table.width / 2, 560, theme.brightJade)
         this.showScorePopup(tableLayout.table.width / 2, 520, 'INVASION REPULSED', undefined, {
           major: true,
           event: true,
           color: theme.css.brightJade,
         })
+        this.showScorePopup(tableLayout.table.width / 2, 610, 'MISSION CLEAR', INVASION_CLEAR_BONUS, {
+          major: true,
+          color: theme.css.agedGold,
+        })
         break
       case 'failed':
+        this.fadeRemainingMissionTargets()
+        this.audio.playMissionFailure()
         this.flashPlayfield(theme.eclipseRed)
         this.showScorePopup(tableLayout.table.width / 2, 520, 'TEMPLE BREACHED', undefined, {
           major: true,
@@ -2337,7 +2377,10 @@ export class PinballScene extends Phaser.Scene {
         })
         break
       case 'inactive':
+        this.clearMissionTargets()
+        break
       case 'ending':
+        this.clearMissionTargets()
         break
     }
   }
@@ -2373,11 +2416,13 @@ export class PinballScene extends Phaser.Scene {
         break
       case 'active': {
         const secondsRemaining = Math.ceil(this.mission.remainingMs / 1000)
+        const totalTargets = this.mission.config.shipTargetCount + this.mission.config.invaderTargetCount
+        const shipsRemaining = this.mission.config.shipTargetCount - this.mission.destroyedShipCount
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
           'ORB OF JUDGMENT',
           `TIME ${secondsRemaining.toString().padStart(2, '0')}`,
-          `ORB STRIKES ${this.mission.scoringEventProgress}/${this.mission.config.successEventTarget}`,
+          `SHIPS LEFT ${shipsRemaining}   INVADERS ${this.mission.destroyedInvaderCount}/${this.mission.config.invaderTargetCount}   TARGETS ${this.mission.destroyedTargetCount}/${totalTargets}\nDESTROY ALL SHIPS OR ${this.mission.config.requiredTargetCount} TOTAL`,
           theme.agedGold,
         )
         break
@@ -2386,8 +2431,8 @@ export class PinballScene extends Phaser.Scene {
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
           'INVASION REPULSED',
-          'THE TEMPLE ENDURES',
-          `${this.mission.scoringEventProgress} ORB STRIKES`,
+          'ORB OF JUDGMENT',
+          `${this.mission.destroyedTargetCount} TARGETS DESTROYED`,
           theme.brightJade,
         )
         break
@@ -2396,7 +2441,7 @@ export class PinballScene extends Phaser.Scene {
           'CONQUISTADOR INVASION',
           'TEMPLE BREACHED',
           'THE PORTAL COLLAPSES',
-          `${this.mission.scoringEventProgress}/${this.mission.config.successEventTarget} ORB STRIKES`,
+          `${this.mission.destroyedTargetCount}/${this.mission.config.requiredTargetCount} REQUIRED TARGETS`,
           theme.ember,
         )
         break
@@ -2416,6 +2461,227 @@ export class PinballScene extends Phaser.Scene {
     this.missionProgressText.setText(progress)
     this.missionUiBacking.setStrokeStyle(4, accentColor, 0.92)
     this.missionUiTrim.setStrokeStyle(2, accentColor, 0.58)
+  }
+
+  private spawnMissionTargets() {
+    this.clearMissionTargets()
+    this.missionTargets = CONQUISTADOR_INVASION_TARGETS.map((definition) => ({
+      definition,
+      visual: this.createMissionTargetVisual(definition),
+      alive: true,
+    }))
+  }
+
+  private createMissionTargetVisual(definition: Readonly<InvasionTargetDefinition>) {
+    const visual =
+      definition.type === 'ship'
+        ? this.createMissionShipVisual(definition.hitRadius)
+        : this.createMissionInvaderVisual(definition.hitRadius)
+
+    return visual.setPosition(definition.x, definition.y).setDepth(9)
+  }
+
+  private createMissionShipVisual(hitRadius: number) {
+    const aura = this.add
+      .ellipse(0, 5, hitRadius * 2.25, hitRadius * 1.42, theme.ember, 0.1)
+      .setStrokeStyle(3, theme.agedGold, 0.68)
+    const silhouette = this.add.graphics()
+    silhouette.fillStyle(theme.obsidian, 0.96)
+    silhouette.lineStyle(4, theme.goldShadow, 0.94)
+    silhouette.fillTriangle(-58, 14, 58, 14, 38, 34)
+    silhouette.strokeTriangle(-58, 14, 58, 14, 38, 34)
+    silhouette.fillRect(-4, -45, 8, 62)
+    silhouette.fillStyle(theme.charcoal, 0.98)
+    silhouette.lineStyle(3, theme.agedGold, 0.9)
+    silhouette.fillTriangle(-2, -40, -2, 7, -48, 7)
+    silhouette.strokeTriangle(-2, -40, -2, 7, -48, 7)
+    silhouette.fillTriangle(6, -31, 6, 8, 44, 8)
+    silhouette.strokeTriangle(6, -31, 6, 8, 44, 8)
+    silhouette.fillStyle(theme.eclipseRed, 0.94)
+    silhouette.fillTriangle(5, -45, 5, -29, 30, -39)
+    silhouette.lineStyle(2, theme.ember, 0.9)
+    silhouette.strokeTriangle(5, -45, 5, -29, 30, -39)
+    silhouette.fillStyle(theme.agedGold, 0.9)
+    silhouette.fillCircle(0, 15, 5)
+
+    return this.add.container(0, 0, [aura, silhouette])
+  }
+
+  private createMissionInvaderVisual(hitRadius: number) {
+    const aura = this.add
+      .circle(0, 2, hitRadius * 1.08, theme.ember, 0.09)
+      .setStrokeStyle(3, theme.goldShadow, 0.72)
+    const silhouette = this.add.graphics()
+    silhouette.fillStyle(theme.obsidian, 0.97)
+    silhouette.lineStyle(3, theme.agedGold, 0.9)
+    silhouette.fillCircle(0, -10, 13)
+    silhouette.strokeCircle(0, -10, 13)
+    silhouette.fillRoundedRect(-18, 1, 36, 28, 8)
+    silhouette.strokeRoundedRect(-18, 1, 36, 28, 8)
+    silhouette.fillStyle(theme.charcoal, 1)
+    silhouette.fillRect(-19, -18, 38, 9)
+    silhouette.lineStyle(3, theme.goldShadow, 0.92)
+    silhouette.strokeRect(-19, -18, 38, 9)
+    silhouette.fillStyle(theme.eclipseRed, 0.95)
+    silhouette.fillTriangle(-6, -23, 6, -23, 0, -39)
+    silhouette.lineStyle(2, theme.ember, 0.9)
+    silhouette.strokeTriangle(-6, -23, 6, -23, 0, -39)
+    silhouette.lineStyle(3, theme.goldShadow, 0.9)
+    silhouette.lineBetween(-13, 28, -20, 40)
+    silhouette.lineBetween(13, 28, 20, 40)
+    silhouette.fillStyle(theme.brightJade, 0.82)
+    silhouette.fillCircle(-5, -10, 2)
+    silhouette.fillCircle(5, -10, 2)
+
+    return this.add.container(0, 0, [aura, silhouette])
+  }
+
+  private updateMissionTargets() {
+    if (!this.mission.missionActive || this.missionTargets.length === 0) {
+      return
+    }
+
+    for (const target of this.missionTargets) {
+      if (!target.alive) {
+        continue
+      }
+
+      const collisionRadius = target.definition.hitRadius + tableLayout.ball.radius
+      const hit = this.balls.some((ball) => {
+        const offsetX = ball.image.x - target.definition.x
+        const offsetY = ball.image.y - target.definition.y
+        return offsetX * offsetX + offsetY * offsetY <= collisionRadius * collisionRadius
+      })
+
+      if (hit) {
+        this.destroyMissionTarget(target)
+        if (!this.mission.missionActive) {
+          break
+        }
+      }
+    }
+  }
+
+  private destroyMissionTarget(target: MissionTargetRuntime) {
+    if (!target.alive || !this.mission.missionActive) {
+      return
+    }
+
+    target.alive = false
+    const now = this.time.now
+    this.missionDestroyCombo =
+      now - this.lastMissionTargetDestroyedAt <= INVASION_COMBO_WINDOW_MS
+        ? Math.min(INVASION_COMBO_MAX, this.missionDestroyCombo + 1)
+        : 1
+    this.lastMissionTargetDestroyedAt = now
+
+    this.addScore(target.definition.points)
+    this.showScorePopup(
+      target.definition.x,
+      target.definition.y - target.definition.hitRadius,
+      target.definition.type === 'ship' ? 'SHIP DESTROYED' : 'INVADER DESTROYED',
+      target.definition.points,
+      {
+        major: target.definition.type === 'ship',
+        color: target.definition.type === 'ship' ? theme.css.agedGold : theme.css.brightJade,
+      },
+    )
+    if (target.definition.type === 'ship') {
+      this.audio.playMissionShipDestroyed()
+    } else {
+      this.audio.playMissionTargetDestroyed()
+    }
+
+    this.flashCircle(
+      target.definition.x,
+      target.definition.y,
+      target.definition.hitRadius * 0.82,
+      theme.ember,
+      tableLayout.juice.flashDurationMs,
+    )
+    this.createMissionDestructionPulse(target.definition.x, target.definition.y, target.definition.hitRadius)
+    this.tweens.killTweensOf(target.visual)
+    this.tweens.add({
+      targets: target.visual,
+      scaleX: 1.42,
+      scaleY: 1.42,
+      alpha: 0,
+      angle: target.definition.type === 'ship' ? 7 : -7,
+      duration: 300,
+      ease: 'Sine.easeOut',
+      onComplete: () => target.visual.destroy(),
+    })
+
+    if (this.missionDestroyCombo > 1) {
+      const comboBonus = (this.missionDestroyCombo - 1) * INVASION_COMBO_STEP_SCORE
+      this.addScore(comboBonus)
+      this.showScorePopup(
+        target.definition.x,
+        target.definition.y + target.definition.hitRadius,
+        `ORB COMBO x${this.missionDestroyCombo}`,
+        comboBonus,
+        { color: theme.css.ember },
+      )
+    }
+
+    this.mission.registerTargetDestroyed(target.definition.type)
+  }
+
+  private createMissionDestructionPulse(x: number, y: number, radius: number) {
+    const pulse = this.add
+      .circle(x, y, radius * 0.72, theme.jade, 0.14)
+      .setStrokeStyle(4, theme.agedGold, 0.9)
+      .setDepth(9)
+    this.missionTransientEffects.add(pulse)
+    this.tweens.add({
+      targets: pulse,
+      scaleX: 1.9,
+      scaleY: 1.9,
+      alpha: 0,
+      duration: 360,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.missionTransientEffects.delete(pulse)
+        pulse.destroy()
+      },
+    })
+  }
+
+  private fadeRemainingMissionTargets() {
+    this.missionTargets.forEach((target) => {
+      if (!target.alive || !target.visual.active) {
+        return
+      }
+      this.tweens.killTweensOf(target.visual)
+      this.tweens.add({
+        targets: target.visual,
+        alpha: 0,
+        scaleX: 0.82,
+        scaleY: 0.82,
+        duration: 280,
+        ease: 'Sine.easeIn',
+        onComplete: () => target.visual.destroy(),
+      })
+    })
+  }
+
+  private clearMissionTargets() {
+    this.missionTargets.forEach((target) => {
+      this.tweens.killTweensOf(target.visual)
+      if (target.visual.active) {
+        target.visual.destroy()
+      }
+    })
+    this.missionTransientEffects.forEach((effect) => {
+      this.tweens.killTweensOf(effect)
+      if (effect.active) {
+        effect.destroy()
+      }
+    })
+    this.missionTargets = []
+    this.missionTransientEffects.clear()
+    this.lastMissionTargetDestroyedAt = -Infinity
+    this.missionDestroyCombo = 0
   }
 
   private ballHudLabel() {
@@ -3109,7 +3375,7 @@ export class PinballScene extends Phaser.Scene {
       this.eclipseState === 'ECLIPSE MULTIBALL' ? tableLayout.tuning.eclipseMultiballJackpotScore : sensor?.score ?? tableLayout.tuning.jackpotScore
     this.audio.playJackpot()
     this.shakeCamera('jackpot')
-    this.addScore(points, 'jackpot')
+    this.addScore(points)
     this.showScorePopup(ball.image.x, ball.image.y - 54, 'TEMPLE JACKPOT', points, {
       major: true,
       event: true,
@@ -3134,7 +3400,7 @@ export class PinballScene extends Phaser.Scene {
     this.audio.playRollover()
     this.litRollovers.add(sensor.id)
     this.setRolloverVisualLit(sensor.id, true)
-    this.addScore(points, 'rollover')
+    this.addScore(points)
     this.showScorePopup(sensor.x, sensor.y - 30, 'ROLLOVER', points)
     this.pulse(this.rolloverVisuals.get(sensor.id), tableLayout.tuning.rolloverPulseScale)
     this.flashRectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.brightJade)
@@ -3240,7 +3506,7 @@ export class PinballScene extends Phaser.Scene {
     this.flashPlayfield(theme.eclipseRed)
     this.ceremonialBurst(tableLayout.table.width / 2, 650, theme.ember)
     this.balls.forEach((ball) => this.flashCircle(ball.image.x, ball.image.y, tableLayout.ball.radius * 2.2, theme.ember, tableLayout.juice.jackpotFlashDurationMs))
-    this.addScore(tableLayout.tuning.eclipseMultiballStartScore, 'multiballStart')
+    this.addScore(tableLayout.tuning.eclipseMultiballStartScore)
     this.showScorePopup(tableLayout.table.width / 2, 650, 'ECLIPSE MULTIBALL', tableLayout.tuning.eclipseMultiballStartScore, {
       major: true,
       event: true,
@@ -3306,16 +3572,15 @@ export class PinballScene extends Phaser.Scene {
     }
 
     const points = multiplier === 2 ? tableLayout.tuning.comboX2Score : tableLayout.tuning.comboX3Score
-    this.addScore(points, 'combo')
+    this.addScore(points)
     this.showScorePopup(ball.image.x, ball.image.y - 64, `COMBO x${multiplier}`, points, {
       major: multiplier === 3,
       color: theme.css.brightJade,
     })
   }
 
-  private addScore(points: number, source: string) {
+  private addScore(points: number) {
     this.score += points
-    this.mission.registerScoringEvent({ source, points })
     if (this.score > this.highScore) {
       this.highScore = this.score
       this.saveHighScore()

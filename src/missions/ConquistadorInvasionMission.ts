@@ -1,15 +1,14 @@
+import type { InvasionTargetType } from './ConquistadorInvasionTargets'
+
 export type MissionState = 'inactive' | 'portalLit' | 'starting' | 'active' | 'success' | 'failed' | 'ending'
 
 export type MissionResult = 'success' | 'failed' | null
 
-export type MissionScoringEvent = {
-  source: string
-  points: number
-}
-
 export type ConquistadorInvasionConfig = {
   durationMs: number
-  successEventTarget: number
+  requiredTargetCount: number
+  shipTargetCount: number
+  invaderTargetCount: number
   startingDurationMs: number
   resultDurationMs: number
   endingDurationMs: number
@@ -17,12 +16,14 @@ export type ConquistadorInvasionConfig = {
 
 export type ConquistadorInvasionHooks = {
   onStateChange?: (state: MissionState, previousState: MissionState) => void
-  onScoringEvent?: (event: MissionScoringEvent, progress: number) => void
+  onTargetDestroyed?: (type: InvasionTargetType, destroyedTargetCount: number) => void
 }
 
 export const CONQUISTADOR_INVASION_CONFIG: ConquistadorInvasionConfig = {
   durationMs: 25_000,
-  successEventTarget: 8,
+  requiredTargetCount: 10,
+  shipTargetCount: 3,
+  invaderTargetCount: 9,
   startingDurationMs: 1_200,
   resultDurationMs: 2_400,
   endingDurationMs: 800,
@@ -34,7 +35,9 @@ export class ConquistadorInvasionMission {
   missionActive = false
   portalPrimed = false
   remainingMs: number
-  scoringEventProgress = 0
+  destroyedTargetCount = 0
+  destroyedShipCount = 0
+  destroyedInvaderCount = 0
   result: MissionResult = null
 
   private stateElapsedMs = 0
@@ -82,13 +85,38 @@ export class ConquistadorInvasionMission {
     this.beginStartingSequence()
   }
 
-  registerScoringEvent(event: MissionScoringEvent) {
+  registerTargetDestroyed(type: InvasionTargetType) {
     if (!this.missionActive) {
       return false
     }
 
-    this.scoringEventProgress += 1
-    this.hooks.onScoringEvent?.(event, this.scoringEventProgress)
+    this.destroyedTargetCount += 1
+    if (type === 'ship') {
+      this.destroyedShipCount += 1
+    } else {
+      this.destroyedInvaderCount += 1
+    }
+    this.hooks.onTargetDestroyed?.(type, this.destroyedTargetCount)
+
+    if (
+      this.destroyedShipCount >= this.config.shipTargetCount ||
+      this.destroyedTargetCount >= this.config.requiredTargetCount
+    ) {
+      this.result = 'success'
+      this.transitionTo('success')
+    }
+    return true
+  }
+
+  forceSuccessForDev() {
+    if (this.state !== 'starting' && this.state !== 'active') {
+      return false
+    }
+
+    this.destroyedShipCount = this.config.shipTargetCount
+    this.destroyedTargetCount = Math.max(this.destroyedTargetCount, this.config.shipTargetCount)
+    this.result = 'success'
+    this.transitionTo('success')
     return true
   }
 
@@ -105,8 +133,8 @@ export class ConquistadorInvasionMission {
       case 'active':
         this.remainingMs = Math.max(0, this.remainingMs - safeDeltaMs)
         if (this.remainingMs === 0) {
-          this.result = this.scoringEventProgress >= this.config.successEventTarget ? 'success' : 'failed'
-          this.transitionTo(this.result)
+          this.result = 'failed'
+          this.transitionTo('failed')
         }
         break
       case 'success':
@@ -132,7 +160,9 @@ export class ConquistadorInvasionMission {
     this.missionActive = false
     this.portalPrimed = false
     this.remainingMs = this.config.durationMs
-    this.scoringEventProgress = 0
+    this.destroyedTargetCount = 0
+    this.destroyedShipCount = 0
+    this.destroyedInvaderCount = 0
     this.result = null
     this.stateElapsedMs = 0
 
@@ -142,7 +172,9 @@ export class ConquistadorInvasionMission {
   }
 
   private beginStartingSequence() {
-    this.scoringEventProgress = 0
+    this.destroyedTargetCount = 0
+    this.destroyedShipCount = 0
+    this.destroyedInvaderCount = 0
     this.remainingMs = this.config.durationMs
     this.result = null
     this.transitionTo('starting')

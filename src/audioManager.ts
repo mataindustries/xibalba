@@ -114,6 +114,37 @@ const RECIPES = {
     tone(440, 360, 0.045, { type: 'triangle', delayMs: 210 }),
     tone(659, 430, 0.03, { type: 'sine', delayMs: 300 }),
   ],
+  missionStart: [
+    noise(130, 0.065, 420, { filterType: 'lowpass' }),
+    tone(84, 380, 0.095, { type: 'sine', endFrequency: 42 }),
+    tone(330, 210, 0.04, { type: 'triangle', delayMs: 65 }),
+    tone(494, 260, 0.035, { type: 'triangle', delayMs: 145 }),
+    tone(740, 340, 0.026, { type: 'sine', delayMs: 230 }),
+  ],
+  missionTargetDestroyed: [
+    noise(52, 0.055, 1120, { q: 1.1 }),
+    tone(190, 90, 0.05, { type: 'square', endFrequency: 92 }),
+    tone(690, 110, 0.026, { type: 'triangle', endFrequency: 920, delayMs: 24 }),
+  ],
+  missionShipDestroyed: [
+    noise(110, 0.085, 390, { filterType: 'lowpass' }),
+    tone(92, 240, 0.1, { type: 'sine', endFrequency: 40 }),
+    tone(294, 170, 0.045, { type: 'sawtooth', endFrequency: 138, delayMs: 28 }),
+    tone(588, 250, 0.03, { type: 'triangle', delayMs: 100 }),
+  ],
+  missionSuccess: [
+    noise(110, 0.06, 520, { filterType: 'lowpass' }),
+    tone(196, 180, 0.05, { type: 'triangle' }),
+    tone(392, 230, 0.05, { type: 'triangle', delayMs: 85 }),
+    tone(587, 290, 0.04, { type: 'triangle', delayMs: 175 }),
+    tone(880, 390, 0.03, { type: 'sine', delayMs: 270 }),
+  ],
+  missionFailure: [
+    noise(120, 0.06, 300, { filterType: 'lowpass' }),
+    tone(164, 230, 0.065, { type: 'sawtooth', endFrequency: 82 }),
+    tone(110, 310, 0.06, { type: 'triangle', endFrequency: 52, delayMs: 130 }),
+    tone(55, 430, 0.055, { type: 'sine', endFrequency: 30, delayMs: 270 }),
+  ],
   drain: [
     noise(150, 0.07, 290, { filterType: 'lowpass' }),
     tone(128, 280, 0.09, { type: 'sawtooth', endFrequency: 46 }),
@@ -235,6 +266,26 @@ export class XibalbaAudioManager {
 
   playMultiball() {
     this.play('multiball', 1200, 3)
+  }
+
+  playMissionStart() {
+    this.play('missionStart', 1000, 3)
+  }
+
+  playMissionTargetDestroyed() {
+    this.play('missionTargetDestroyed', 70, 1)
+  }
+
+  playMissionShipDestroyed() {
+    this.play('missionShipDestroyed', 180, 2)
+  }
+
+  playMissionSuccess() {
+    this.play('missionSuccess', 1000, 3)
+  }
+
+  playMissionFailure() {
+    this.play('missionFailure', 1000, 3)
   }
 
   playDrain() {
