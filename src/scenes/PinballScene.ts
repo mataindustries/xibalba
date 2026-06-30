@@ -13,6 +13,11 @@ import {
   INVASION_COMBO_STEP_SCORE,
   INVASION_COMBO_WINDOW_MS,
 } from '../missions/ConquistadorInvasionTargets'
+import {
+  ORB_JACKPOT_BONUS,
+  OrbJackpotReward,
+  invasionFailureBonus,
+} from '../missions/ConquistadorInvasionRewards'
 import { loadWallOfChampions, qualifiesForWallOfChampions, saveChampionScore } from '../wallOfChampions'
 import type { MissionState } from '../missions/ConquistadorInvasionMission'
 import type { InvasionTargetDefinition } from '../missions/ConquistadorInvasionTargets'
@@ -151,6 +156,7 @@ export class PinballScene extends Phaser.Scene {
   private ballSaveText!: Phaser.GameObjects.Text
   private eclipseStateText!: Phaser.GameObjects.Text
   private rolloverText!: Phaser.GameObjects.Text
+  private orbBonusText!: Phaser.GameObjects.Text
   private controlsText!: Phaser.GameObjects.Text
   private devModeText!: Phaser.GameObjects.Text
   private startDevHint?: Phaser.GameObjects.Text
@@ -174,6 +180,7 @@ export class PinballScene extends Phaser.Scene {
   private lastMissionOrbTrailAt = 0
   private lastMissionUrgencySecond = -1
   private missionDestroyCombo = 0
+  private readonly orbJackpotReward = new OrbJackpotReward()
   private startOverlay!: Phaser.GameObjects.Container
   private gameOverOverlay!: Phaser.GameObjects.Container
   private pauseOverlay!: Phaser.GameObjects.Container
@@ -821,8 +828,20 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(40)
       .setAlpha(0.96)
 
+    this.orbBonusText = this.add
+      .text(tableLayout.table.width - 24, 112, `ORB BONUS LIT  •  NEXT JACKPOT +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`, {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '13px',
+        color: theme.css.brightJade,
+        stroke: theme.css.ink,
+        strokeThickness: 4,
+      })
+      .setOrigin(1, 0)
+      .setDepth(42)
+      .setVisible(false)
+
     this.devModeText = this.add
-      .text(tableLayout.table.width - 24, 112, 'DEV  •  I START  •  SHIFT+I WIN  •  ALT+I FAIL', {
+      .text(tableLayout.table.width - 24, 148, 'DEV  •  I START  •  SHIFT+I WIN  •  ALT+I FAIL', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
         color: theme.css.ember,
@@ -834,7 +853,7 @@ export class PinballScene extends Phaser.Scene {
       .setVisible(false)
 
     this.visualAlignmentText = this.add
-      .text(tableLayout.table.width - 24, 134, this.visualAlignmentSummary(), {
+      .text(tableLayout.table.width - 24, 170, this.visualAlignmentSummary(), {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '12px',
         color: theme.css.goldShadow,
@@ -2305,6 +2324,7 @@ export class PinballScene extends Phaser.Scene {
 
   private resetGameState() {
     this.mission.reset()
+    this.orbJackpotReward.reset()
     this.score = 0
     this.currentBall = 1
     this.gameOver = false
@@ -2328,6 +2348,9 @@ export class PinballScene extends Phaser.Scene {
     this.eclipseStateText?.setText(`STATE ${this.currentModeState()}`)
     this.eclipseStateText?.setColor(this.currentModeColor())
     this.ballSaveText?.setVisible(this.isBallSaverActive() && !this.gameOver)
+    this.orbBonusText?.setVisible(
+      this.orbJackpotReward.isLit && this.mission.state === 'inactive' && this.hasStarted && !this.gameOver,
+    )
     this.devModeText?.setVisible(this.devModeEnabled)
     this.visualAlignmentText?.setText(this.visualAlignmentSummary())
     this.visualAlignmentText?.setVisible(this.devModeEnabled)
@@ -2372,6 +2395,7 @@ export class PinballScene extends Phaser.Scene {
         this.presentMissionResult(true)
         this.audio.playMissionSuccess()
         this.addScore(INVASION_CLEAR_BONUS)
+        this.lightOrbBonus()
         this.showScorePopup(tableLayout.table.width / 2, 520, 'INVASION REPULSED', undefined, {
           major: true,
           event: true,
@@ -2382,7 +2406,15 @@ export class PinballScene extends Phaser.Scene {
           color: theme.css.agedGold,
         })
         break
-      case 'failed':
+      case 'failed': {
+        const consolationBonus = this.missionConsolationBonus()
+        if (consolationBonus > 0) {
+          this.addScore(consolationBonus)
+          this.showScorePopup(tableLayout.table.width / 2, 610, 'LAST STAND BONUS', consolationBonus, {
+            major: true,
+            color: theme.css.agedGold,
+          })
+        }
         this.fadeRemainingMissionTargets()
         this.presentMissionResult(false)
         this.audio.playMissionFailure()
@@ -2392,6 +2424,7 @@ export class PinballScene extends Phaser.Scene {
           color: theme.css.ember,
         })
         break
+      }
       case 'inactive':
         this.clearMissionTargets()
         this.clearMissionPresentation()
@@ -2449,8 +2482,8 @@ export class PinballScene extends Phaser.Scene {
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
           'INVASION REPULSED',
-          'ORB OF JUDGMENT',
-          `${this.mission.destroyedTargetCount} TARGETS DESTROYED`,
+          'ORB OF JUDGMENT BONUS',
+          `SHIPS ${this.mission.destroyedShipCount}/${this.mission.config.shipTargetCount}   TARGETS ${this.mission.destroyedTargetCount}/${this.missionTargetCount()}\nMISSION +${INVASION_CLEAR_BONUS.toLocaleString('en-US')}   NEXT JACKPOT +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`,
           theme.brightJade,
         )
         break
@@ -2458,15 +2491,19 @@ export class PinballScene extends Phaser.Scene {
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
           'TEMPLE BREACHED',
-          'THE PORTAL COLLAPSES',
-          `SHIPS ${this.mission.destroyedShipCount}/${this.mission.config.requiredShipCount}   TARGETS ${this.mission.destroyedTargetCount}/${this.mission.config.requiredTargetCount}`,
+          `INVADERS DESTROYED: ${this.mission.destroyedInvaderCount}`,
+          `SHIPS ${this.mission.destroyedShipCount}/${this.mission.config.shipTargetCount}   TARGETS ${this.mission.destroyedTargetCount}/${this.missionTargetCount()}\nCONSOLATION +${this.missionConsolationBonus().toLocaleString('en-US')}`,
           theme.ember,
         )
         break
       case 'ending': {
         const resultText = this.mission.result === 'success' ? 'INVASION REPULSED' : 'TEMPLE BREACHED'
         const resultColor = this.mission.result === 'success' ? theme.brightJade : theme.ember
-        this.setMissionUiContent('CONQUISTADOR INVASION', resultText, 'PORTAL SEALING', 'RETURNING TO NORMAL PLAY', resultColor)
+        const resultReward =
+          this.mission.result === 'success'
+            ? `ORB BONUS LIT   NEXT JACKPOT +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`
+            : `MISSION BONUS +${this.missionConsolationBonus().toLocaleString('en-US')}`
+        this.setMissionUiContent('CONQUISTADOR INVASION', resultText, 'PORTAL SEALING', resultReward, resultColor)
         break
       }
     }
@@ -2479,6 +2516,41 @@ export class PinballScene extends Phaser.Scene {
     this.missionProgressText.setText(progress)
     this.missionUiBacking.setStrokeStyle(4, accentColor, 0.92)
     this.missionUiTrim.setStrokeStyle(2, accentColor, 0.58)
+  }
+
+  private missionTargetCount() {
+    return this.mission.config.shipTargetCount + this.mission.config.invaderTargetCount
+  }
+
+  private missionConsolationBonus() {
+    return invasionFailureBonus(this.mission.destroyedTargetCount)
+  }
+
+  private lightOrbBonus() {
+    this.orbJackpotReward.light()
+    this.updateHud()
+  }
+
+  private claimOrbBonus(ball: BallRuntime) {
+    if (this.mission.state !== 'inactive') {
+      return false
+    }
+
+    const bonus = this.orbJackpotReward.consume()
+    if (bonus === 0) {
+      return false
+    }
+
+    this.addScore(bonus)
+    this.audio.playOrbBonusClaimed()
+    this.showScorePopup(ball.image.x, ball.image.y - 82, 'ORB BONUS CLAIMED', bonus, {
+      major: true,
+      event: true,
+      color: theme.css.brightJade,
+    })
+    this.ceremonialBurst(ball.image.x, ball.image.y - 54, theme.brightJade)
+    this.updateHud()
+    return true
   }
 
   private startMissionCinematic() {
@@ -3540,6 +3612,7 @@ export class PinballScene extends Phaser.Scene {
 
   private endGame() {
     this.mission.reset()
+    this.orbJackpotReward.reset()
     this.releaseAllPointerControls()
     this.clearAllBalls()
     this.plungerHeld = false
@@ -3849,6 +3922,8 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private handleJackpotHit(ball: BallRuntime, label: string) {
+    this.claimOrbBonus(ball)
+
     if (!this.mission.startFromPortal()) {
       this.mission.lightPortal()
     }

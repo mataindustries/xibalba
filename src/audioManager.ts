@@ -150,6 +150,12 @@ const RECIPES = {
     tone(880, 72, 0.024, { type: 'triangle', endFrequency: 660 }),
     tone(1760, 54, 0.012, { type: 'sine', delayMs: 26 }),
   ],
+  orbBonusClaimed: [
+    noise(48, 0.042, 880, { q: 1.1 }),
+    tone(294, 115, 0.04, { type: 'triangle', endFrequency: 440 }),
+    tone(587, 165, 0.036, { type: 'triangle', delayMs: 52 }),
+    tone(1174, 220, 0.022, { type: 'sine', delayMs: 118 }),
+  ],
   drain: [
     noise(150, 0.07, 290, { filterType: 'lowpass' }),
     tone(128, 280, 0.09, { type: 'sawtooth', endFrequency: 46 }),
@@ -295,6 +301,10 @@ export class XibalbaAudioManager {
 
   playMissionUrgency() {
     this.play('missionUrgency', 760, 1)
+  }
+
+  playOrbBonusClaimed() {
+    this.play('orbBonusClaimed', 600, 2)
   }
 
   playDrain() {
