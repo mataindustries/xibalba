@@ -2,7 +2,12 @@ import Phaser from 'phaser'
 import { XibalbaAudioManager } from '../audioManager'
 import { tableLayout } from '../config/tableLayout'
 import { fetchGlobalScores, submitGlobalScore } from '../globalLeaderboard'
+import {
+  CONQUISTADOR_INVASION_CONFIG,
+  ConquistadorInvasionMission,
+} from '../missions/ConquistadorInvasionMission'
 import { loadWallOfChampions, qualifiesForWallOfChampions, saveChampionScore } from '../wallOfChampions'
+import type { MissionState } from '../missions/ConquistadorInvasionMission'
 import type {
   BumperBody,
   FlipperConfig,
@@ -55,6 +60,7 @@ type ControlKeys = {
   four: Phaser.Input.Keyboard.Key
   five: Phaser.Input.Keyboard.Key
   multiball: Phaser.Input.Keyboard.Key
+  invasion: Phaser.Input.Keyboard.Key
 }
 
 type ComboHitKind = 'bumper' | 'sling' | 'targetOrLane'
@@ -135,6 +141,13 @@ export class PinballScene extends Phaser.Scene {
   private startDevHint?: Phaser.GameObjects.Text
   private visualAlignmentText!: Phaser.GameObjects.Text
   private shotTestText!: Phaser.GameObjects.Text
+  private missionUi!: Phaser.GameObjects.Container
+  private missionUiBacking!: Phaser.GameObjects.Rectangle
+  private missionUiTrim!: Phaser.GameObjects.Rectangle
+  private missionTitleText!: Phaser.GameObjects.Text
+  private missionStatusText!: Phaser.GameObjects.Text
+  private missionTimerText!: Phaser.GameObjects.Text
+  private missionProgressText!: Phaser.GameObjects.Text
   private startOverlay!: Phaser.GameObjects.Container
   private gameOverOverlay!: Phaser.GameObjects.Container
   private pauseOverlay!: Phaser.GameObjects.Container
@@ -208,6 +221,7 @@ export class PinballScene extends Phaser.Scene {
   private audioToggleBacking?: Phaser.GameObjects.Rectangle
   private audioToggleIcon?: Phaser.GameObjects.Graphics
   private lastTrailAt = 0
+  private mission!: ConquistadorInvasionMission
 
   constructor() {
     super('PinballScene')
@@ -244,7 +258,11 @@ export class PinballScene extends Phaser.Scene {
     this.createPlungerVisual()
     this.highScore = this.loadHighScore()
     this.champions = loadWallOfChampions()
+    this.mission = new ConquistadorInvasionMission(CONQUISTADOR_INVASION_CONFIG, {
+      onStateChange: (state) => this.handleMissionStateChange(state),
+    })
     this.createHud()
+    this.createMissionUi()
     this.createAudioToggle()
     this.createTouchHints()
     this.createStartOverlay()
@@ -265,6 +283,8 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
+    this.mission.update(delta)
+    this.updateMissionUi()
     this.updateFlippers(delta)
     this.updatePlunger()
     this.maybeAssistShooterExit()
@@ -774,7 +794,7 @@ export class PinballScene extends Phaser.Scene {
       .setAlpha(0.96)
 
     this.devModeText = this.add
-      .text(tableLayout.table.width - 24, 112, 'DEV MODE', {
+      .text(tableLayout.table.width - 24, 112, 'DEV MODE  •  I INVASION', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '13px',
         color: theme.css.ember,
@@ -809,6 +829,84 @@ export class PinballScene extends Phaser.Scene {
         lineSpacing: 4,
       })
       .setDepth(46)
+      .setVisible(false)
+  }
+
+  private createMissionUi() {
+    const panelWidth = 680
+    const panelHeight = 170
+    const shadow = this.add.rectangle(8, 10, panelWidth + 18, panelHeight + 18, theme.ink, 0.62)
+    this.missionUiBacking = this.add
+      .rectangle(0, 0, panelWidth, panelHeight, theme.obsidian, 0.94)
+      .setStrokeStyle(4, theme.agedGold, 0.9)
+    this.missionUiTrim = this.add
+      .rectangle(0, 0, panelWidth - 18, panelHeight - 18, theme.charcoal, 0.38)
+      .setStrokeStyle(2, theme.goldShadow, 0.76)
+    const topRuleLeft = this.add.rectangle(-226, -64, 146, 3, theme.agedGold, 0.76)
+    const topRuleRight = this.add.rectangle(226, -64, 146, 3, theme.agedGold, 0.76)
+    const portalGlyph = this.add
+      .circle(0, -64, 12, theme.ink, 0.9)
+      .setStrokeStyle(3, theme.brightJade, 0.86)
+    const portalCore = this.add.circle(0, -64, 4, theme.agedGold, 0.92)
+
+    this.missionTitleText = this.add
+      .text(0, -47, '', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '18px',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
+        strokeThickness: 4,
+        letterSpacing: 2,
+      })
+      .setOrigin(0.5)
+
+    this.missionStatusText = this.add
+      .text(0, -11, '', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '31px',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
+        strokeThickness: 6,
+        letterSpacing: 1,
+      })
+      .setOrigin(0.5)
+
+    this.missionTimerText = this.add
+      .text(0, 28, '', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '24px',
+        color: theme.css.ivory,
+        stroke: theme.css.ink,
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+
+    this.missionProgressText = this.add
+      .text(0, 58, '', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '15px',
+        color: theme.css.bone,
+        stroke: theme.css.ink,
+        strokeThickness: 4,
+        letterSpacing: 1,
+      })
+      .setOrigin(0.5)
+
+    this.missionUi = this.add
+      .container(tableLayout.table.width / 2, 230, [
+        shadow,
+        this.missionUiBacking,
+        this.missionUiTrim,
+        topRuleLeft,
+        topRuleRight,
+        portalGlyph,
+        portalCore,
+        this.missionTitleText,
+        this.missionStatusText,
+        this.missionTimerText,
+        this.missionProgressText,
+      ])
+      .setDepth(48)
       .setVisible(false)
   }
 
@@ -1834,6 +1932,7 @@ export class PinballScene extends Phaser.Scene {
         four: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR),
         five: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE),
         multiball: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M),
+        invasion: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I),
       }
       this.input.keyboard.on('keydown', (event: KeyboardEvent) => {
         void this.audio.unlock()
@@ -1956,7 +2055,7 @@ export class PinballScene extends Phaser.Scene {
       const points = bumper?.score ?? 1000
       this.audio.playBumper()
       this.shakeCamera('bumper')
-      this.addScore(points)
+      this.addScore(points, 'bumper')
       this.showScorePopup(otherBody.position.x, otherBody.position.y - 28, 'BUMPER HIT', points)
       if (bumper) {
         this.pulseBumperVisual(bumper)
@@ -1971,7 +2070,7 @@ export class PinballScene extends Phaser.Scene {
       const sling = tableLayout.slingshots.find((item) => label === `sling:${item.id}`)
       if (sling) {
         this.audio.playSling()
-        this.addScore(sling.score)
+        this.addScore(sling.score, 'sling')
         this.showScorePopup(otherBody.position.x, otherBody.position.y - 22, 'SLING HIT', sling.score)
         this.pulse(this.slingVisuals.get(sling.id))
         this.applyBallForce(ball, sling.force.x * tableLayout.tuning.slingForceScale, sling.force.y * tableLayout.tuning.slingForceScale)
@@ -1985,7 +2084,7 @@ export class PinballScene extends Phaser.Scene {
       const target = tableLayout.sensors.find((sensor) => sensor.id === targetId)
       const points = target?.score ?? 250
       this.audio.playTarget()
-      this.addScore(points)
+      this.addScore(points, 'target')
       this.showScorePopup(ball.image.x, ball.image.y - 28, 'TARGET HIT', points)
       this.registerComboHit('targetOrLane', ball)
       return
@@ -2086,6 +2185,10 @@ export class PinballScene extends Phaser.Scene {
       this.startEclipseMultiball()
     }
 
+    if (this.devModeEnabled && Phaser.Input.Keyboard.JustDown(this.keys.invasion)) {
+      this.mission.forceStartForDev()
+    }
+
     if (this.devModeEnabled && this.shotTestMode) {
       this.handleShotTestInput()
     }
@@ -2157,6 +2260,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private resetGameState() {
+    this.mission.reset()
     this.score = 0
     this.currentBall = 1
     this.gameOver = false
@@ -2189,6 +2293,131 @@ export class PinballScene extends Phaser.Scene {
     this.touchHintLaunch?.setVisible(this.hasStarted && !this.gamePaused && !this.gameOver)
   }
 
+  private handleMissionStateChange(state: MissionState) {
+    this.updateMissionUi()
+
+    switch (state) {
+      case 'portalLit':
+        this.showScorePopup(tableLayout.table.width / 2, 430, 'PORTAL LIT', undefined, {
+          major: true,
+          event: true,
+          color: theme.css.brightJade,
+        })
+        break
+      case 'starting':
+        this.flashPlayfield(theme.agedGold)
+        this.showScorePopup(tableLayout.table.width / 2, 520, 'CONQUISTADOR INVASION', undefined, {
+          major: true,
+          event: true,
+          color: theme.css.agedGold,
+        })
+        break
+      case 'active':
+        this.ceremonialBurst(tableLayout.table.width / 2, 520, theme.agedGold)
+        this.showScorePopup(tableLayout.table.width / 2, 520, 'ORB OF JUDGMENT', undefined, {
+          major: true,
+          event: true,
+          color: theme.css.ivory,
+        })
+        break
+      case 'success':
+        this.flashPlayfield(theme.jade)
+        this.showScorePopup(tableLayout.table.width / 2, 520, 'INVASION REPULSED', undefined, {
+          major: true,
+          event: true,
+          color: theme.css.brightJade,
+        })
+        break
+      case 'failed':
+        this.flashPlayfield(theme.eclipseRed)
+        this.showScorePopup(tableLayout.table.width / 2, 520, 'TEMPLE BREACHED', undefined, {
+          major: true,
+          event: true,
+          color: theme.css.ember,
+        })
+        break
+      case 'inactive':
+      case 'ending':
+        break
+    }
+  }
+
+  private updateMissionUi() {
+    if (!this.missionUi || !this.mission) {
+      return
+    }
+
+    const state = this.mission.state
+    this.missionUi.setVisible(state !== 'inactive')
+
+    switch (state) {
+      case 'inactive':
+        return
+      case 'portalLit':
+        this.setMissionUiContent(
+          'THE ECLIPSE GATE AWAKENS',
+          'PORTAL LIT',
+          '',
+          'SHOOT TEMPLE TO ENTER',
+          theme.brightJade,
+        )
+        break
+      case 'starting':
+        this.setMissionUiContent(
+          'CONQUISTADOR INVASION',
+          'ORB OF JUDGMENT',
+          'PORTAL OPENING',
+          'PREPARE THE ORB',
+          theme.agedGold,
+        )
+        break
+      case 'active': {
+        const secondsRemaining = Math.ceil(this.mission.remainingMs / 1000)
+        this.setMissionUiContent(
+          'CONQUISTADOR INVASION',
+          'ORB OF JUDGMENT',
+          `TIME ${secondsRemaining.toString().padStart(2, '0')}`,
+          `ORB STRIKES ${this.mission.scoringEventProgress}/${this.mission.config.successEventTarget}`,
+          theme.agedGold,
+        )
+        break
+      }
+      case 'success':
+        this.setMissionUiContent(
+          'CONQUISTADOR INVASION',
+          'INVASION REPULSED',
+          'THE TEMPLE ENDURES',
+          `${this.mission.scoringEventProgress} ORB STRIKES`,
+          theme.brightJade,
+        )
+        break
+      case 'failed':
+        this.setMissionUiContent(
+          'CONQUISTADOR INVASION',
+          'TEMPLE BREACHED',
+          'THE PORTAL COLLAPSES',
+          `${this.mission.scoringEventProgress}/${this.mission.config.successEventTarget} ORB STRIKES`,
+          theme.ember,
+        )
+        break
+      case 'ending': {
+        const resultText = this.mission.result === 'success' ? 'INVASION REPULSED' : 'TEMPLE BREACHED'
+        const resultColor = this.mission.result === 'success' ? theme.brightJade : theme.ember
+        this.setMissionUiContent('CONQUISTADOR INVASION', resultText, 'PORTAL SEALING', 'RETURNING TO NORMAL PLAY', resultColor)
+        break
+      }
+    }
+  }
+
+  private setMissionUiContent(title: string, status: string, timer: string, progress: string, accentColor: number) {
+    this.missionTitleText.setText(title)
+    this.missionStatusText.setText(status).setColor(Phaser.Display.Color.IntegerToColor(accentColor).rgba)
+    this.missionTimerText.setText(timer)
+    this.missionProgressText.setText(progress)
+    this.missionUiBacking.setStrokeStyle(4, accentColor, 0.92)
+    this.missionUiTrim.setStrokeStyle(2, accentColor, 0.58)
+  }
+
   private ballHudLabel() {
     return `BALL ${this.currentBall}/${tableLayout.game.ballsPerGame}  ${this.ballState}`
   }
@@ -2210,6 +2439,23 @@ export class PinballScene extends Phaser.Scene {
       return 'GAME OVER'
     }
 
+    if (this.mission.state !== 'inactive') {
+      switch (this.mission.state) {
+        case 'portalLit':
+          return 'PORTAL LIT'
+        case 'starting':
+          return 'INVASION STARTING'
+        case 'active':
+          return 'INVASION'
+        case 'success':
+          return 'INVASION REPULSED'
+        case 'failed':
+          return 'TEMPLE BREACHED'
+        case 'ending':
+          return 'PORTAL SEALING'
+      }
+    }
+
     if (this.isBallSaverActive() && this.eclipseState !== 'ECLIPSE MULTIBALL') {
       return 'BALL SAVE'
     }
@@ -2219,6 +2465,18 @@ export class PinballScene extends Phaser.Scene {
 
   private currentModeColor() {
     if (this.gameOver) {
+      return theme.css.agedGold
+    }
+
+    if (this.mission.state === 'success' || (this.mission.state === 'ending' && this.mission.result === 'success')) {
+      return theme.css.brightJade
+    }
+
+    if (this.mission.state === 'failed' || (this.mission.state === 'ending' && this.mission.result === 'failed')) {
+      return theme.css.ember
+    }
+
+    if (this.mission.state !== 'inactive') {
       return theme.css.agedGold
     }
 
@@ -2533,6 +2791,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private endGame() {
+    this.mission.reset()
     this.releaseAllPointerControls()
     this.clearAllBalls()
     this.plungerHeld = false
@@ -2836,6 +3095,10 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private handleJackpotHit(ball: BallRuntime, label: string) {
+    if (!this.mission.startFromPortal()) {
+      this.mission.lightPortal()
+    }
+
     if (this.eclipseState === 'ECLIPSE READY') {
       this.startEclipseMultiball(ball)
       return
@@ -2846,7 +3109,7 @@ export class PinballScene extends Phaser.Scene {
       this.eclipseState === 'ECLIPSE MULTIBALL' ? tableLayout.tuning.eclipseMultiballJackpotScore : sensor?.score ?? tableLayout.tuning.jackpotScore
     this.audio.playJackpot()
     this.shakeCamera('jackpot')
-    this.addScore(points)
+    this.addScore(points, 'jackpot')
     this.showScorePopup(ball.image.x, ball.image.y - 54, 'TEMPLE JACKPOT', points, {
       major: true,
       event: true,
@@ -2871,7 +3134,7 @@ export class PinballScene extends Phaser.Scene {
     this.audio.playRollover()
     this.litRollovers.add(sensor.id)
     this.setRolloverVisualLit(sensor.id, true)
-    this.addScore(points)
+    this.addScore(points, 'rollover')
     this.showScorePopup(sensor.x, sensor.y - 30, 'ROLLOVER', points)
     this.pulse(this.rolloverVisuals.get(sensor.id), tableLayout.tuning.rolloverPulseScale)
     this.flashRectangle(sensor.x, sensor.y, sensor.width, sensor.height, theme.brightJade)
@@ -2883,6 +3146,8 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private handleRolloverCompletion(sensor: SensorBody) {
+    this.mission.primePortal()
+
     if (this.eclipseState === 'NORMAL') {
       this.setEclipseState('ECLIPSE READY')
       this.audio.playEclipseReady()
@@ -2975,7 +3240,7 @@ export class PinballScene extends Phaser.Scene {
     this.flashPlayfield(theme.eclipseRed)
     this.ceremonialBurst(tableLayout.table.width / 2, 650, theme.ember)
     this.balls.forEach((ball) => this.flashCircle(ball.image.x, ball.image.y, tableLayout.ball.radius * 2.2, theme.ember, tableLayout.juice.jackpotFlashDurationMs))
-    this.addScore(tableLayout.tuning.eclipseMultiballStartScore)
+    this.addScore(tableLayout.tuning.eclipseMultiballStartScore, 'multiballStart')
     this.showScorePopup(tableLayout.table.width / 2, 650, 'ECLIPSE MULTIBALL', tableLayout.tuning.eclipseMultiballStartScore, {
       major: true,
       event: true,
@@ -3041,15 +3306,16 @@ export class PinballScene extends Phaser.Scene {
     }
 
     const points = multiplier === 2 ? tableLayout.tuning.comboX2Score : tableLayout.tuning.comboX3Score
-    this.addScore(points)
+    this.addScore(points, 'combo')
     this.showScorePopup(ball.image.x, ball.image.y - 64, `COMBO x${multiplier}`, points, {
       major: multiplier === 3,
       color: theme.css.brightJade,
     })
   }
 
-  private addScore(points: number) {
+  private addScore(points: number, source: string) {
     this.score += points
+    this.mission.registerScoringEvent({ source, points })
     if (this.score > this.highScore) {
       this.highScore = this.score
       this.saveHighScore()

@@ -1,0 +1,165 @@
+export type MissionState = 'inactive' | 'portalLit' | 'starting' | 'active' | 'success' | 'failed' | 'ending'
+
+export type MissionResult = 'success' | 'failed' | null
+
+export type MissionScoringEvent = {
+  source: string
+  points: number
+}
+
+export type ConquistadorInvasionConfig = {
+  durationMs: number
+  successEventTarget: number
+  startingDurationMs: number
+  resultDurationMs: number
+  endingDurationMs: number
+}
+
+export type ConquistadorInvasionHooks = {
+  onStateChange?: (state: MissionState, previousState: MissionState) => void
+  onScoringEvent?: (event: MissionScoringEvent, progress: number) => void
+}
+
+export const CONQUISTADOR_INVASION_CONFIG: ConquistadorInvasionConfig = {
+  durationMs: 25_000,
+  successEventTarget: 8,
+  startingDurationMs: 1_200,
+  resultDurationMs: 2_400,
+  endingDurationMs: 800,
+}
+
+export class ConquistadorInvasionMission {
+  readonly config: ConquistadorInvasionConfig
+  state: MissionState = 'inactive'
+  missionActive = false
+  portalPrimed = false
+  remainingMs: number
+  scoringEventProgress = 0
+  result: MissionResult = null
+
+  private stateElapsedMs = 0
+  private readonly hooks: ConquistadorInvasionHooks
+
+  constructor(
+    config = CONQUISTADOR_INVASION_CONFIG,
+    hooks: ConquistadorInvasionHooks = {},
+  ) {
+    this.config = config
+    this.hooks = hooks
+    this.remainingMs = config.durationMs
+  }
+
+  primePortal() {
+    if (this.state !== 'inactive' || this.portalPrimed) {
+      return false
+    }
+
+    this.portalPrimed = true
+    return true
+  }
+
+  lightPortal() {
+    if (this.state !== 'inactive' || !this.portalPrimed) {
+      return false
+    }
+
+    this.portalPrimed = false
+    this.transitionTo('portalLit')
+    return true
+  }
+
+  startFromPortal() {
+    if (this.state !== 'portalLit') {
+      return false
+    }
+
+    this.beginStartingSequence()
+    return true
+  }
+
+  forceStartForDev() {
+    this.reset()
+    this.beginStartingSequence()
+  }
+
+  registerScoringEvent(event: MissionScoringEvent) {
+    if (!this.missionActive) {
+      return false
+    }
+
+    this.scoringEventProgress += 1
+    this.hooks.onScoringEvent?.(event, this.scoringEventProgress)
+    return true
+  }
+
+  update(deltaMs: number) {
+    const safeDeltaMs = Math.max(0, deltaMs)
+    this.stateElapsedMs += safeDeltaMs
+
+    switch (this.state) {
+      case 'starting':
+        if (this.stateElapsedMs >= this.config.startingDurationMs) {
+          this.transitionTo('active')
+        }
+        break
+      case 'active':
+        this.remainingMs = Math.max(0, this.remainingMs - safeDeltaMs)
+        if (this.remainingMs === 0) {
+          this.result = this.scoringEventProgress >= this.config.successEventTarget ? 'success' : 'failed'
+          this.transitionTo(this.result)
+        }
+        break
+      case 'success':
+      case 'failed':
+        if (this.stateElapsedMs >= this.config.resultDurationMs) {
+          this.transitionTo('ending')
+        }
+        break
+      case 'ending':
+        if (this.stateElapsedMs >= this.config.endingDurationMs) {
+          this.reset()
+        }
+        break
+      case 'inactive':
+      case 'portalLit':
+        break
+    }
+  }
+
+  reset() {
+    const previousState = this.state
+    this.state = 'inactive'
+    this.missionActive = false
+    this.portalPrimed = false
+    this.remainingMs = this.config.durationMs
+    this.scoringEventProgress = 0
+    this.result = null
+    this.stateElapsedMs = 0
+
+    if (previousState !== 'inactive') {
+      this.hooks.onStateChange?.('inactive', previousState)
+    }
+  }
+
+  private beginStartingSequence() {
+    this.scoringEventProgress = 0
+    this.remainingMs = this.config.durationMs
+    this.result = null
+    this.transitionTo('starting')
+  }
+
+  private transitionTo(state: MissionState) {
+    if (this.state === state) {
+      return
+    }
+
+    const previousState = this.state
+    this.state = state
+    this.stateElapsedMs = 0
+    this.missionActive = state === 'active'
+    if (state === 'active') {
+      this.remainingMs = this.config.durationMs
+    }
+    this.hooks.onStateChange?.(state, previousState)
+  }
+}
