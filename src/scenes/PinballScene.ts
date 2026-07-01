@@ -156,7 +156,8 @@ export class PinballScene extends Phaser.Scene {
   private ballSaveText!: Phaser.GameObjects.Text
   private eclipseStateText!: Phaser.GameObjects.Text
   private rolloverText!: Phaser.GameObjects.Text
-  private orbBonusText!: Phaser.GameObjects.Text
+  private guidanceBacking!: Phaser.GameObjects.Rectangle
+  private guidanceText!: Phaser.GameObjects.Text
   private controlsText!: Phaser.GameObjects.Text
   private devModeText!: Phaser.GameObjects.Text
   private startDevHint?: Phaser.GameObjects.Text
@@ -828,16 +829,24 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(40)
       .setAlpha(0.96)
 
-    this.orbBonusText = this.add
-      .text(tableLayout.table.width - 24, 112, `ORB BONUS LIT  •  NEXT JACKPOT +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`, {
+    this.guidanceBacking = this.add
+      .rectangle(tableLayout.table.width / 2, 170, 620, 44, theme.ink, 0.78)
+      .setStrokeStyle(2, theme.goldShadow, 0.62)
+      .setDepth(8.8)
+      .setVisible(false)
+
+    this.guidanceText = this.add
+      .text(tableLayout.table.width / 2, 170, 'COMPLETE ROLLOVERS', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '13px',
-        color: theme.css.brightJade,
+        fontSize: '17px',
+        color: theme.css.bone,
         stroke: theme.css.ink,
         strokeThickness: 4,
+        letterSpacing: 1,
+        align: 'center',
       })
-      .setOrigin(1, 0)
-      .setDepth(42)
+      .setOrigin(0.5)
+      .setDepth(9)
       .setVisible(false)
 
     this.devModeText = this.add
@@ -1055,12 +1064,12 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(90)
 
     const textPlate = this.add
-      .rectangle(tableLayout.table.width / 2, 1035, 690, 360, theme.ink, 0.62)
+      .rectangle(tableLayout.table.width / 2, 1048, 790, 454, theme.ink, 0.7)
       .setStrokeStyle(3, theme.goldShadow, 0.54)
       .setDepth(90.6)
 
     const high = this.add
-      .text(tableLayout.table.width / 2, 905, `HIGH SCORE ${this.highScore}`, {
+      .text(tableLayout.table.width / 2, 858, `HIGH SCORE ${this.highScore}`, {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '24px',
         color: theme.css.brightJade,
@@ -1073,7 +1082,7 @@ export class PinballScene extends Phaser.Scene {
       .setDepth(91)
 
     const prompt = this.add
-      .text(tableLayout.table.width / 2, 1000, 'Tap / Press Space to Start', {
+      .text(tableLayout.table.width / 2, 930, 'Tap / Press Space to Start', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: '34px',
         color: theme.css.ivory,
@@ -1085,19 +1094,20 @@ export class PinballScene extends Phaser.Scene {
       .setName('startPrompt')
       .setDepth(91)
 
+    const templeRulesPanel = this.createTempleRulesPanel()
+
     const controls = this.add
       .text(
         tableLayout.table.width / 2,
-        1128,
-        ['A / Left  left flipper', 'D / Right  right flipper', 'Space / Down  launch', 'P pause   R restart'].join('\n'),
+        1243,
+        'A/← LEFT  •  D/→ RIGHT  •  SPACE/↓ LAUNCH  •  P PAUSE  •  R RESTART',
         {
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-          fontSize: '22px',
+          fontSize: '18px',
           color: theme.css.bone,
           stroke: theme.css.ink,
           strokeThickness: 4,
           align: 'center',
-          lineSpacing: 12,
         },
       )
       .setOrigin(0.5)
@@ -1119,8 +1129,74 @@ export class PinballScene extends Phaser.Scene {
     this.wallOfChampionsPanel = this.createWallOfChampionsPanel(this.champions)
 
     this.startOverlay = this.add
-      .container(0, 0, [titleArt, textPlate, high, prompt, controls, this.startDevHint, this.wallOfChampionsPanel])
+      .container(0, 0, [
+        titleArt,
+        textPlate,
+        high,
+        prompt,
+        templeRulesPanel,
+        controls,
+        this.startDevHint,
+        this.wallOfChampionsPanel,
+      ])
       .setDepth(90)
+  }
+
+  private createTempleRulesPanel() {
+    const width = 720
+    const height = 232
+    const panel = this.add.container(tableLayout.table.width / 2, 1093)
+    const stone = this.add.graphics()
+
+    stone.fillStyle(theme.ink, 0.92)
+    stone.fillRoundedRect(-width / 2, -height / 2, width, height, 7)
+    stone.fillStyle(theme.charcoal, 0.76)
+    stone.fillRoundedRect(-width / 2 + 9, -height / 2 + 9, width - 18, height - 18, 5)
+    stone.lineStyle(5, theme.goldShadow, 0.78)
+    stone.strokeRoundedRect(-width / 2, -height / 2, width, height, 7)
+    stone.lineStyle(2, theme.agedGold, 0.92)
+    stone.strokeRoundedRect(-width / 2 + 10, -height / 2 + 10, width - 20, height - 20, 5)
+    stone.fillStyle(theme.jade, 0.5)
+    stone.fillTriangle(-width / 2 + 23, -height / 2 + 23, -width / 2 + 49, -height / 2 + 23, -width / 2 + 23, -height / 2 + 49)
+    stone.fillTriangle(width / 2 - 23, -height / 2 + 23, width / 2 - 49, -height / 2 + 23, width / 2 - 23, -height / 2 + 49)
+
+    const title = this.add
+      .text(0, -91, 'TEMPLE RULES', {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '21px',
+        color: theme.css.agedGold,
+        stroke: theme.css.ink,
+        strokeThickness: 5,
+        letterSpacing: 2,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+
+    const rules = this.add
+      .text(
+        0,
+        -61,
+        [
+          '◆ COMPLETE ROLLOVERS',
+          '◆ SHOOT TEMPLE TO OPEN PORTAL',
+          '◆ DESTROY INVADERS IN CONQUISTADOR INVASION',
+          '◆ CLEAR MISSION TO LIGHT ORB BONUS',
+          '◆ SHOOT TEMPLE AGAIN TO CLAIM BONUS',
+        ].join('\n'),
+        {
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+          fontSize: '18px',
+          color: theme.css.bone,
+          stroke: theme.css.ink,
+          strokeThickness: 4,
+          align: 'left',
+          lineSpacing: 7,
+        },
+      )
+      .setOrigin(0.5, 0)
+
+    panel.add([stone, title, rules])
+    return panel
   }
 
   private createWallOfChampionsPanel(champions: ChampionEntry[]) {
@@ -2348,9 +2424,7 @@ export class PinballScene extends Phaser.Scene {
     this.eclipseStateText?.setText(`STATE ${this.currentModeState()}`)
     this.eclipseStateText?.setColor(this.currentModeColor())
     this.ballSaveText?.setVisible(this.isBallSaverActive() && !this.gameOver)
-    this.orbBonusText?.setVisible(
-      this.orbJackpotReward.isLit && this.mission.state === 'inactive' && this.hasStarted && !this.gameOver,
-    )
+    this.updateNormalPlayGuidance()
     this.devModeText?.setVisible(this.devModeEnabled)
     this.visualAlignmentText?.setText(this.visualAlignmentSummary())
     this.visualAlignmentText?.setVisible(this.devModeEnabled)
@@ -2360,12 +2434,47 @@ export class PinballScene extends Phaser.Scene {
     this.touchHintLaunch?.setVisible(this.hasStarted && !this.gamePaused && !this.gameOver)
   }
 
+  private updateNormalPlayGuidance() {
+    if (!this.guidanceText || !this.guidanceBacking || !this.mission) {
+      return
+    }
+
+    const visible =
+      this.hasStarted &&
+      !this.gameOver &&
+      !this.gamePaused &&
+      this.mission.state === 'inactive'
+
+    this.guidanceText.setVisible(visible)
+    this.guidanceBacking.setVisible(visible)
+    if (!visible) {
+      return
+    }
+
+    if (this.orbJackpotReward.isLit) {
+      this.guidanceText
+        .setText(`ORB BONUS LIT  •  SHOOT TEMPLE FOR +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`)
+        .setColor(theme.css.brightJade)
+      this.guidanceBacking.setStrokeStyle(2, theme.brightJade, 0.78)
+      return
+    }
+
+    if (this.mission.portalPrimed) {
+      this.guidanceText.setText('TEMPLE SHOT LIT  •  SHOOT TEMPLE').setColor(theme.css.agedGold)
+      this.guidanceBacking.setStrokeStyle(2, theme.agedGold, 0.74)
+      return
+    }
+
+    this.guidanceText.setText('COMPLETE ROLLOVERS').setColor(theme.css.bone)
+    this.guidanceBacking.setStrokeStyle(2, theme.goldShadow, 0.62)
+  }
+
   private handleMissionStateChange(state: MissionState) {
     this.updateMissionUi()
 
     switch (state) {
       case 'portalLit':
-        this.showScorePopup(tableLayout.table.width / 2, 430, 'PORTAL LIT', undefined, {
+        this.showScorePopup(tableLayout.table.width / 2, 430, 'PORTAL LIT — SHOOT TEMPLE', undefined, {
           major: true,
           event: true,
           color: theme.css.brightJade,
@@ -2384,7 +2493,7 @@ export class PinballScene extends Phaser.Scene {
         this.activateMissionBattlefield()
         this.fadeMissionPortal()
         this.spawnMissionTargets()
-        this.showScorePopup(tableLayout.table.width / 2, 520, 'ORB OF JUDGMENT', undefined, {
+        this.showScorePopup(tableLayout.table.width / 2, 520, 'DESTROY 2 SHIPS + 8 TARGETS', undefined, {
           major: true,
           event: true,
           color: theme.css.ivory,
@@ -2451,17 +2560,17 @@ export class PinballScene extends Phaser.Scene {
         this.setMissionUiContent(
           'THE ECLIPSE GATE AWAKENS',
           'PORTAL LIT',
-          '',
-          'SHOOT TEMPLE TO ENTER',
+          'SHOOT TEMPLE',
+          'ENTER THE PORTAL',
           theme.brightJade,
         )
         break
       case 'starting':
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
-          'ORB OF JUDGMENT',
-          'PORTAL OPENING',
-          'PREPARE THE ORB',
+          'INVASION ACTIVE',
+          'TIME 30',
+          'DESTROY 2 SHIPS + 8 TARGETS',
           theme.agedGold,
         )
         break
@@ -2470,9 +2579,9 @@ export class PinballScene extends Phaser.Scene {
         const shipsRemaining = this.mission.config.shipTargetCount - this.mission.destroyedShipCount
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
-          'ORB OF JUDGMENT',
+          'INVASION ACTIVE',
           `TIME ${secondsRemaining.toString().padStart(2, '0')}`,
-          `SHIPS ${this.mission.destroyedShipCount}/${this.mission.config.requiredShipCount}   LEFT ${shipsRemaining}   TARGETS ${this.mission.destroyedTargetCount}/${this.mission.config.requiredTargetCount}\nINVADERS ${this.mission.destroyedInvaderCount}/${this.mission.config.invaderTargetCount}   COMPLETE BOTH OBJECTIVES`,
+          `DESTROY 2 SHIPS + 8 TARGETS\nSHIPS ${this.mission.destroyedShipCount}/${this.mission.config.requiredShipCount}   LEFT ${shipsRemaining}   TARGETS ${this.mission.destroyedTargetCount}/${this.mission.config.requiredTargetCount}`,
           theme.agedGold,
         )
         this.missionTimerText.setColor(secondsRemaining <= 5 ? theme.css.ember : theme.css.ivory)
@@ -2481,9 +2590,9 @@ export class PinballScene extends Phaser.Scene {
       case 'success':
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
-          'INVASION REPULSED',
-          'ORB OF JUDGMENT BONUS',
-          `SHIPS ${this.mission.destroyedShipCount}/${this.mission.config.shipTargetCount}   TARGETS ${this.mission.destroyedTargetCount}/${this.missionTargetCount()}\nMISSION +${INVASION_CLEAR_BONUS.toLocaleString('en-US')}   NEXT JACKPOT +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`,
+          'ORB BONUS LIT',
+          `NEXT TEMPLE SHOT +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`,
+          `INVASION REPULSED   MISSION +${INVASION_CLEAR_BONUS.toLocaleString('en-US')}`,
           theme.brightJade,
         )
         break
@@ -2501,7 +2610,7 @@ export class PinballScene extends Phaser.Scene {
         const resultColor = this.mission.result === 'success' ? theme.brightJade : theme.ember
         const resultReward =
           this.mission.result === 'success'
-            ? `ORB BONUS LIT   NEXT JACKPOT +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`
+            ? `ORB BONUS LIT   NEXT TEMPLE SHOT +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`
             : `MISSION BONUS +${this.missionConsolationBonus().toLocaleString('en-US')}`
         this.setMissionUiContent('CONQUISTADOR INVASION', resultText, 'PORTAL SEALING', resultReward, resultColor)
         break
@@ -3980,7 +4089,7 @@ export class PinballScene extends Phaser.Scene {
     if (this.eclipseState === 'NORMAL') {
       this.setEclipseState('ECLIPSE READY')
       this.audio.playEclipseReady()
-      this.showScorePopup(tableLayout.table.width / 2, sensor.y - 86, 'ECLIPSE READY', undefined, {
+      this.showScorePopup(tableLayout.table.width / 2, sensor.y - 86, 'TEMPLE SHOT LIT — SHOOT TEMPLE', undefined, {
         major: true,
         event: true,
         color: theme.css.brightJade,
