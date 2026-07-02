@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { XibalbaAudioManager } from '../audioManager'
+import { missionVisuals } from '../config/missionVisuals'
 import { tableLayout } from '../config/tableLayout'
 import { fetchGlobalScores, submitGlobalScore } from '../globalLeaderboard'
 import {
@@ -182,11 +183,26 @@ export class PinballScene extends Phaser.Scene {
   private missionBattlefieldTint?: Phaser.GameObjects.Rectangle
   private missionPortalVisual?: Phaser.GameObjects.Container
   private missionOrbAuras = new Map<number, Phaser.GameObjects.Arc>()
-  private missionOrbTrails = new Set<Phaser.GameObjects.Arc>()
+  private missionOrbAuraPool: Phaser.GameObjects.Arc[] = []
+  private missionOrbTrailPool: Phaser.GameObjects.Arc[] = []
+  private missionOrbTrailStartedAt = new Map<Phaser.GameObjects.Arc, number>()
   private lastMissionTargetDestroyedAt = -Infinity
   private lastMissionOrbTrailAt = 0
+  private lastMissionOrbVisualUpdateAt = 0
   private lastMissionUrgencySecond = -1
+  private missionTimerPulseStartedAt = 0
   private missionDestroyCombo = 0
+  private renderedMissionState?: MissionState
+  private renderedMissionSecond = -1
+  private renderedMissionDestroyedTargets = -1
+  private renderedMissionDestroyedShips = -1
+  private renderedScore = -1
+  private renderedHighScore = -1
+  private renderedBallNumber = -1
+  private renderedBallState?: BallState
+  private renderedRolloverCount = -1
+  private renderedModeState = ''
+  private normalPlayGuidanceState = ''
   private readonly orbJackpotReward = new OrbJackpotReward()
   private startOverlay!: Phaser.GameObjects.Container
   private gameOverOverlay!: Phaser.GameObjects.Container
@@ -303,6 +319,7 @@ export class PinballScene extends Phaser.Scene {
     })
     this.createHud()
     this.createMissionUi()
+    this.createMissionOrbPools()
     this.createAudioToggle()
     this.createTouchHints()
     this.createStartOverlay()
@@ -312,6 +329,7 @@ export class PinballScene extends Phaser.Scene {
     this.bindCollisions()
     this.drawRuntimeInsertUnderlays()
     this.setGameplayFrozen(true)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroyMissionVisuals, this)
     void this.loadGlobalLeaderboard().catch(() => this.showGlobalWallUnavailable())
   }
 
@@ -324,9 +342,11 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.mission.update(delta)
-    this.updateMissionTargets()
-    this.updateMissionUi()
-    this.updateMissionPresentation()
+    if (this.mission.missionActive) {
+      this.updateMissionTargets()
+      this.updateMissionUi()
+      this.updateMissionPresentation()
+    }
     this.updateFlippers(delta)
     this.updatePlunger()
     this.maybeAssistShooterExit()
@@ -1044,6 +1064,7 @@ export class PinballScene extends Phaser.Scene {
         this.missionProgressText,
       ])
       .setDepth(9.7)
+      .setActive(false)
       .setVisible(false)
   }
 
@@ -2495,16 +2516,39 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private updateHud() {
-    this.scoreText?.setText(`SCORE ${this.score}`)
-    this.highScoreText?.setText(`HIGH ${this.highScore}`)
-    this.ballStateText?.setText(this.ballHudLabel())
-    this.rolloverText?.setText(`ROLLOVERS ${this.litRollovers.size}/${this.rolloverCount()}`)
-    this.eclipseStateText?.setText(`STATE ${this.currentModeState()}`)
-    this.eclipseStateText?.setColor(this.currentModeColor())
+    if (this.scoreText && this.renderedScore !== this.score) {
+      this.renderedScore = this.score
+      this.scoreText.setText(`SCORE ${this.score}`)
+    }
+    if (this.highScoreText && this.renderedHighScore !== this.highScore) {
+      this.renderedHighScore = this.highScore
+      this.highScoreText.setText(`HIGH ${this.highScore}`)
+    }
+
+    if (
+      this.ballStateText &&
+      (this.renderedBallNumber !== this.currentBall || this.renderedBallState !== this.ballState)
+    ) {
+      this.renderedBallNumber = this.currentBall
+      this.renderedBallState = this.ballState
+      this.ballStateText.setText(this.ballHudLabel())
+    }
+    if (this.rolloverText && this.renderedRolloverCount !== this.litRollovers.size) {
+      this.renderedRolloverCount = this.litRollovers.size
+      this.rolloverText.setText(`ROLLOVERS ${this.litRollovers.size}/${this.rolloverCount()}`)
+    }
+    const modeState = this.currentModeState()
+    if (this.eclipseStateText && this.renderedModeState !== modeState) {
+      this.renderedModeState = modeState
+      this.eclipseStateText.setText(`STATE ${modeState}`)
+      this.eclipseStateText.setColor(this.currentModeColor())
+    }
     this.ballSaveText?.setVisible(this.isBallSaverActive() && !this.gameOver)
     this.updateNormalPlayGuidance()
     this.devModeText?.setVisible(this.devModeEnabled)
-    this.visualAlignmentText?.setText(this.visualAlignmentSummary())
+    if (this.devModeEnabled && this.visualAlignmentText?.text === '') {
+      this.visualAlignmentText.setText(this.visualAlignmentSummary())
+    }
     this.visualAlignmentText?.setVisible(this.devModeEnabled)
     this.controlsText?.setVisible(this.hasStarted && !this.gameOver)
     this.touchHintLeft?.setVisible(this.hasStarted && !this.gamePaused && !this.gameOver)
@@ -2523,13 +2567,24 @@ export class PinballScene extends Phaser.Scene {
       !this.gamePaused &&
       this.mission.state === 'inactive'
 
-    this.guidanceText.setVisible(visible)
-    this.guidanceBacking.setVisible(visible)
     if (!visible) {
+      if (this.normalPlayGuidanceState !== 'hidden') {
+        this.normalPlayGuidanceState = 'hidden'
+        this.guidanceText.setVisible(false)
+        this.guidanceBacking.setVisible(false)
+      }
       return
     }
 
-    if (this.orbJackpotReward.isLit) {
+    const guidanceState = this.orbJackpotReward.isLit ? 'orb' : this.mission.portalPrimed ? 'portal' : 'rollovers'
+    if (this.normalPlayGuidanceState === guidanceState) {
+      return
+    }
+    this.normalPlayGuidanceState = guidanceState
+    this.guidanceText.setVisible(true)
+    this.guidanceBacking.setVisible(true)
+
+    if (guidanceState === 'orb') {
       this.guidanceText
         .setText(`ORB BONUS LIT  •  SHOOT TEMPLE FOR +${ORB_JACKPOT_BONUS.toLocaleString('en-US')}`)
         .setColor(theme.css.brightJade)
@@ -2537,7 +2592,7 @@ export class PinballScene extends Phaser.Scene {
       return
     }
 
-    if (this.mission.portalPrimed) {
+    if (guidanceState === 'portal') {
       this.guidanceText.setText('TEMPLE SHOT LIT  •  SHOOT TEMPLE').setColor(theme.css.agedGold)
       this.guidanceBacking.setStrokeStyle(2, theme.agedGold, 0.74)
       return
@@ -2548,6 +2603,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private handleMissionStateChange(state: MissionState) {
+    this.renderedMissionState = undefined
     this.updateMissionUi()
 
     switch (state) {
@@ -2629,7 +2685,24 @@ export class PinballScene extends Phaser.Scene {
     }
 
     const state = this.mission.state
-    this.missionUi.setVisible(state !== 'inactive')
+    const secondsRemaining = state === 'active' ? Math.ceil(this.mission.remainingMs / 1000) : -1
+    const missionUiChanged =
+      this.renderedMissionState !== state ||
+      this.renderedMissionSecond !== secondsRemaining ||
+      this.renderedMissionDestroyedTargets !== this.mission.destroyedTargetCount ||
+      this.renderedMissionDestroyedShips !== this.mission.destroyedShipCount
+
+    if (!missionUiChanged) {
+      return
+    }
+
+    this.renderedMissionState = state
+    this.renderedMissionSecond = secondsRemaining
+    this.renderedMissionDestroyedTargets = this.mission.destroyedTargetCount
+    this.renderedMissionDestroyedShips = this.mission.destroyedShipCount
+
+    const visible = state !== 'inactive'
+    this.missionUi.setActive(visible).setVisible(visible)
 
     switch (state) {
       case 'inactive':
@@ -2653,7 +2726,6 @@ export class PinballScene extends Phaser.Scene {
         )
         break
       case 'active': {
-        const secondsRemaining = Math.ceil(this.mission.remainingMs / 1000)
         this.setMissionUiContent(
           'CONQUISTADOR INVASION',
           'WAR MODE',
@@ -2789,16 +2861,18 @@ export class PinballScene extends Phaser.Scene {
       duration: 420,
       ease: 'Back.easeOut',
     })
-    this.tweens.add({
-      targets: this.missionUiWarningLamps,
-      alpha: 0.26,
-      scaleX: 1.45,
-      scaleY: 1.45,
-      duration: 420,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+    if (!missionVisuals.reducedMotion) {
+      this.tweens.add({
+        targets: this.missionUiWarningLamps,
+        alpha: 0.26,
+        scaleX: 1.45,
+        scaleY: 1.45,
+        duration: 420,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
   }
 
   private createMissionBattlefieldOverlay() {
@@ -2814,28 +2888,17 @@ export class PinballScene extends Phaser.Scene {
       theme.obsidian,
       0.2,
     )
-    const eclipseHaze = this.add.ellipse(540, 690, 980, 900, theme.eclipseRed, 0.052)
-    const templeEnergy = this.add.ellipse(540, 398, 390, 280, theme.jade, 0.035)
-    const emberHazeLeft = this.add.ellipse(150, 970, 430, 920, theme.ember, 0.034)
-    const emberHazeRight = this.add.ellipse(910, 920, 420, 860, theme.ember, 0.03)
-    const edgeShadeLeft = this.add.rectangle(45, 950, 90, 1_650, theme.ink, 0.3)
-    const edgeShadeRight = this.add.rectangle(1_035, 950, 90, 1_650, theme.ink, 0.3)
+    const eclipseHaze = this.add.ellipse(540, 690, 940, 820, theme.eclipseRed, 0.04)
+    const templeEnergy = this.add.ellipse(540, 398, 340, 230, theme.jade, 0.03)
+    const emberHaze = this.add.ellipse(540, 1_040, 820, 680, theme.ember, 0.022)
     const battlefieldGeometry = this.add.graphics()
-    battlefieldGeometry.fillStyle(theme.eclipseRed, 0.045)
-    battlefieldGeometry.fillTriangle(0, 360, 0, 1_420, 350, 950)
-    battlefieldGeometry.fillTriangle(1_080, 360, 1_080, 1_420, 730, 950)
-    battlefieldGeometry.lineStyle(3, theme.ember, 0.16)
-    battlefieldGeometry.lineBetween(28, 420, 270, 870)
-    battlefieldGeometry.lineBetween(1_052, 420, 810, 870)
-    battlefieldGeometry.lineStyle(2, theme.agedGold, 0.2)
+    battlefieldGeometry.lineStyle(2, theme.agedGold, 0.18)
     battlefieldGeometry.strokeCircle(540, 395, 116)
     battlefieldGeometry.strokeCircle(540, 395, 142)
-    battlefieldGeometry.lineStyle(1, theme.brightJade, 0.18)
-    battlefieldGeometry.strokeCircle(540, 395, 129)
-    for (let index = 0; index < 8; index += 1) {
-      const angle = (Math.PI * 2 * index) / 8
+    for (let index = 0; index < 4; index += 1) {
+      const angle = (Math.PI * 2 * index) / 4
       const innerRadius = 146
-      const outerRadius = 166
+      const outerRadius = 162
       battlefieldGeometry.lineBetween(
         540 + Math.cos(angle) * innerRadius,
         395 + Math.sin(angle) * innerRadius,
@@ -2857,71 +2920,55 @@ export class PinballScene extends Phaser.Scene {
     banners.fillTriangle(121, 607, 121, 720, 183, 662)
     banners.fillTriangle(889, 586, 889, 700, 827, 641)
 
-    const smokeWisps = [
-      this.add.ellipse(210, 1_110, 330, 100, theme.charcoal, 0.12),
-      this.add.ellipse(500, 1_280, 470, 126, theme.eclipseRed, 0.058),
-      this.add.ellipse(830, 1_070, 310, 94, theme.charcoal, 0.11),
-      this.add.ellipse(610, 760, 250, 66, theme.ember, 0.038),
-    ]
-    const emberMotes = Array.from({ length: 12 }, (_, index) => {
-      const x = 78 + ((index * 173) % 920)
-      const y = 690 + ((index * 137) % 780)
-      return this.add.circle(x, y, 2 + (index % 3), index % 4 === 0 ? theme.agedGold : theme.ember, 0.34)
-    })
+    const smokeWisps: Phaser.GameObjects.Ellipse[] = []
+    if (missionVisuals.smokeEnabled) {
+      const smokeCount = Math.min(missionVisuals.maxSmokeWisps, 2)
+      for (let index = 0; index < smokeCount; index += 1) {
+        smokeWisps.push(
+          index === 0
+            ? this.add.ellipse(230, 1_120, 310, 86, theme.charcoal, 0.08)
+            : this.add.ellipse(790, 1_080, 290, 82, theme.eclipseRed, 0.042),
+        )
+      }
+    }
 
     this.missionBattlefieldOverlay = this.add
       .container(0, 0, [
         this.missionBattlefieldTint,
         eclipseHaze,
         templeEnergy,
-        emberHazeLeft,
-        emberHazeRight,
-        edgeShadeLeft,
-        edgeShadeRight,
+        emberHaze,
         battlefieldGeometry,
         banners,
         ...smokeWisps,
-        ...emberMotes,
       ])
       .setDepth(3)
       .setAlpha(0)
 
-    smokeWisps.forEach((smoke, index) => {
+    if (!missionVisuals.reducedMotion) {
+      smokeWisps.forEach((smoke, index) => {
+        this.tweens.add({
+          targets: smoke,
+          x: smoke.x + (index % 2 === 0 ? 24 : -20),
+          y: smoke.y - 18,
+          alpha: smoke.alpha * 0.62,
+          duration: 4_200 + index * 640,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      })
       this.tweens.add({
-        targets: smoke,
-        x: smoke.x + (index % 2 === 0 ? 34 : -28),
-        y: smoke.y - 24,
-        alpha: smoke.alpha * 0.58,
-        duration: 3_800 + index * 620,
+        targets: templeEnergy,
+        alpha: 0.05,
+        scaleX: 1.06,
+        scaleY: 1.06,
+        duration: 1_900,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       })
-    })
-    ;[emberHazeLeft, emberHazeRight, templeEnergy].forEach((glow, index) => {
-      this.tweens.add({
-        targets: glow,
-        alpha: glow.alpha * (index === 2 ? 1.8 : 1.5),
-        scaleX: index === 2 ? 1.08 : 1.04,
-        scaleY: index === 2 ? 1.08 : 1.04,
-        duration: 1_500 + index * 320,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      })
-    })
-    emberMotes.forEach((mote, index) => {
-      this.tweens.add({
-        targets: mote,
-        x: mote.x + (index % 2 === 0 ? 18 : -14),
-        y: mote.y - 90 - (index % 4) * 14,
-        alpha: 0,
-        duration: 1_900 + (index % 5) * 280,
-        delay: index * 90,
-        repeat: -1,
-        ease: 'Sine.easeOut',
-      })
-    })
+    }
     this.tweens.add({
       targets: this.missionBattlefieldOverlay,
       alpha: 1,
@@ -2935,37 +2982,29 @@ export class PinballScene extends Phaser.Scene {
 
     const lightColumn = this.add.rectangle(0, 22, 18, 310, theme.brightJade, 0.055)
     const horizonFlare = this.add.ellipse(0, 18, 260, 86, theme.ember, 0.07)
-    const crossLightHorizontal = this.add.rectangle(0, 0, 214, 3, theme.agedGold, 0.28)
-    const crossLightVertical = this.add.rectangle(0, 0, 3, 214, theme.agedGold, 0.22)
     const rays = this.add.graphics()
-    rays.lineStyle(4, theme.agedGold, 0.54)
-    for (let index = 0; index < 16; index += 1) {
-      const angle = (Math.PI * 2 * index) / 16
-      const inner = index % 2 === 0 ? 78 : 88
-      const outer = index % 2 === 0 ? 121 : 108
+    rays.lineStyle(4, theme.agedGold, 0.5)
+    for (let index = 0; index < 8; index += 1) {
+      const angle = (Math.PI * 2 * index) / 8
+      const inner = 80
+      const outer = index % 2 === 0 ? 116 : 106
       rays.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * outer, Math.sin(angle) * outer)
     }
 
     const runeRing = this.add.graphics()
-    for (let index = 0; index < 8; index += 1) {
-      const angle = (Math.PI * 2 * index) / 8
+    for (let index = 0; index < 4; index += 1) {
+      const angle = (Math.PI * 2 * index) / 4
       const x = Math.cos(angle) * 101
       const y = Math.sin(angle) * 101
       runeRing.fillStyle(index % 2 === 0 ? theme.agedGold : theme.brightJade, 0.72)
       runeRing.fillTriangle(x, y - 7, x + 6, y + 5, x - 6, y + 5)
     }
-    const portalShadow = this.add
-      .circle(0, 0, 94, theme.ink, 0.5)
-      .setStrokeStyle(3, theme.goldShadow, 0.72)
     const outerJade = this.add
       .circle(0, 0, 86, theme.jade, 0.055)
       .setStrokeStyle(7, theme.brightJade, 0.76)
-    const emberRing = this.add
-      .circle(0, 0, 61, theme.eclipseRed, 0.13)
-      .setStrokeStyle(5, theme.ember, 0.82)
     const eclipseCore = this.add
-      .circle(0, 0, 39, theme.ink, 0.96)
-      .setStrokeStyle(3, theme.agedGold, 0.9)
+      .circle(0, 0, 46, theme.ink, 0.96)
+      .setStrokeStyle(4, theme.ember, 0.78)
     const glyph = this.add
       .triangle(0, 1, 0, -21, 18, 15, -18, 15, theme.brightJade, 0.72)
       .setStrokeStyle(2, theme.ivory, 0.62)
@@ -2978,13 +3017,9 @@ export class PinballScene extends Phaser.Scene {
       .container(540, 385, [
         lightColumn,
         horizonFlare,
-        crossLightHorizontal,
-        crossLightVertical,
         rays,
         runeRing,
-        portalShadow,
         outerJade,
-        emberRing,
         eclipseCore,
         glyph,
         orbCore,
@@ -3002,58 +3037,59 @@ export class PinballScene extends Phaser.Scene {
       duration: 360,
       ease: 'Back.easeOut',
     })
-    this.tweens.add({
-      targets: outerJade,
-      alpha: 0.18,
-      scaleX: 1.3,
-      scaleY: 1.3,
-      duration: 520,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-    this.tweens.add({
-      targets: runeRing,
-      angle: -180,
-      duration: 1_450,
-      repeat: -1,
-      ease: 'Linear',
-    })
-    this.tweens.add({
-      targets: emberRing,
-      angle: -180,
-      scaleX: 0.9,
-      scaleY: 0.9,
-      duration: 880,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+    if (!missionVisuals.reducedMotion) {
+      this.tweens.add({
+        targets: outerJade,
+        alpha: 0.18,
+        scaleX: 1.24,
+        scaleY: 1.24,
+        duration: 620,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+      this.tweens.add({
+        targets: runeRing,
+        angle: -180,
+        duration: 1_450,
+        repeat: -1,
+        ease: 'Linear',
+      })
+    } else {
+      this.tweens.add({
+        targets: runeRing,
+        angle: -45,
+        duration: 900,
+        ease: 'Sine.easeOut',
+      })
+    }
     this.tweens.add({
       targets: rays,
       angle: 90,
       duration: 1_200,
       ease: 'Sine.easeInOut',
     })
-    this.tweens.add({
-      targets: [lightColumn, horizonFlare],
-      alpha: 0.14,
-      scaleX: 1.16,
-      duration: 460,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-    this.tweens.add({
-      targets: orbCore,
-      scaleX: 1.55,
-      scaleY: 1.55,
-      alpha: 0.7,
-      duration: 320,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+    if (!missionVisuals.reducedMotion) {
+      this.tweens.add({
+        targets: [lightColumn, horizonFlare],
+        alpha: 0.14,
+        scaleX: 1.16,
+        duration: 460,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+      this.tweens.add({
+        targets: orbCore,
+        scaleX: 1.55,
+        scaleY: 1.55,
+        alpha: 0.7,
+        duration: 320,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
     this.tweens.add({
       targets: ignitionFlash,
       scaleX: 2.35,
@@ -3100,78 +3136,161 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.updateMissionOrbPresentation()
+    this.updateMissionTimerPulse()
     const secondsRemaining = Math.ceil(this.mission.remainingMs / 1000)
     if (secondsRemaining > 0 && secondsRemaining <= 5 && secondsRemaining !== this.lastMissionUrgencySecond) {
       this.lastMissionUrgencySecond = secondsRemaining
       this.audio.playMissionUrgency()
-      this.tweens.killTweensOf(this.missionTimerText)
+      this.missionTimerPulseStartedAt = this.time.now
       this.missionTimerText.setScale(1.16)
-      this.tweens.add({
-        targets: this.missionTimerText,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 180,
-        ease: 'Sine.easeOut',
-      })
+    }
+  }
+
+  private updateMissionTimerPulse() {
+    if (this.missionTimerPulseStartedAt === 0) {
+      return
+    }
+
+    const progress = Math.min(1, (this.time.now - this.missionTimerPulseStartedAt) / 180)
+    this.missionTimerText.setScale(1.16 - progress * 0.16)
+    if (progress === 1) {
+      this.missionTimerPulseStartedAt = 0
     }
   }
 
   private updateMissionOrbPresentation() {
-    const activeBallIds = new Set(this.balls.map((ball) => ball.id))
-    this.balls.forEach((ball) => {
+    const now = this.time.now
+    if (now - this.lastMissionOrbVisualUpdateAt < missionVisuals.orbVisualUpdateIntervalMs) {
+      return
+    }
+    this.lastMissionOrbVisualUpdateAt = now
+    this.updateMissionOrbTrails(now)
+
+    for (const ball of this.balls) {
       let aura = this.missionOrbAuras.get(ball.id)
       if (!aura?.active) {
-        aura = this.add
-          .circle(ball.image.x, ball.image.y, tableLayout.ball.radius * 1.48, theme.jade, 0.055)
-          .setStrokeStyle(3, theme.agedGold, 0.56)
-          .setDepth(9.5)
+        aura = this.availableMissionOrbAura()
+        if (!aura) {
+          continue
+        }
+        aura.setActive(true).setVisible(true)
         this.missionOrbAuras.set(ball.id, aura)
       }
 
       const phase = this.time.now * 0.006 + ball.id
       aura.setPosition(ball.image.x, ball.image.y)
-      aura.setAlpha(0.34 + Math.sin(phase) * 0.1)
-      aura.setScale(0.98 + Math.sin(phase) * 0.035)
-    })
+      if (missionVisuals.reducedMotion) {
+        aura.setAlpha(0.28).setScale(1)
+      } else {
+        aura.setAlpha(0.34 + Math.sin(phase) * 0.1)
+        aura.setScale(0.98 + Math.sin(phase) * 0.035)
+      }
+    }
 
-    this.missionOrbAuras.forEach((aura, ballId) => {
-      if (!activeBallIds.has(ballId)) {
+    for (const [ballId, aura] of this.missionOrbAuras) {
+      let ballStillActive = false
+      for (const ball of this.balls) {
+        if (ball.id === ballId) {
+          ballStillActive = true
+          break
+        }
+      }
+      if (!ballStillActive) {
         this.tweens.killTweensOf(aura)
-        aura.destroy()
+        aura.setActive(false).setVisible(false)
         this.missionOrbAuras.delete(ballId)
       }
-    })
+    }
 
-    if (this.time.now - this.lastMissionOrbTrailAt < 92) {
+    if (now - this.lastMissionOrbTrailAt < missionVisuals.orbTrailIntervalMs) {
       return
     }
 
-    this.lastMissionOrbTrailAt = this.time.now
-    this.balls.forEach((ball) => {
-      const trail = this.add
-        .circle(ball.image.x, ball.image.y, tableLayout.ball.radius * 0.76, theme.brightJade, 0.13)
-        .setStrokeStyle(1, theme.agedGold, 0.24)
-        .setDepth(9.25)
-      this.missionOrbTrails.add(trail)
-      this.tweens.add({
-        targets: trail,
-        scaleX: 0.28,
-        scaleY: 0.28,
-        alpha: 0,
-        duration: 250,
-        ease: 'Sine.easeOut',
-        onComplete: () => {
-          this.missionOrbTrails.delete(trail)
-          trail.destroy()
-        },
-      })
-    })
+    this.lastMissionOrbTrailAt = now
+    for (const ball of this.balls) {
+      const trail = this.availableMissionOrbTrail()
+      if (!trail) {
+        break
+      }
+      trail
+        .setActive(true)
+        .setVisible(true)
+        .setPosition(ball.image.x, ball.image.y)
+        .setScale(1)
+        .setAlpha(0.11)
+      this.missionOrbTrailStartedAt.set(trail, now)
+    }
+  }
+
+  private updateMissionOrbTrails(now: number) {
+    for (const trail of this.missionOrbTrailPool) {
+      if (!trail.active) {
+        continue
+      }
+
+      const startedAt = this.missionOrbTrailStartedAt.get(trail)
+      if (startedAt === undefined) {
+        trail.setActive(false).setVisible(false)
+        continue
+      }
+
+      const progress = Math.min(1, (now - startedAt) / 220)
+      trail.setScale(1 - progress * 0.65).setAlpha(0.11 * (1 - progress))
+      if (progress === 1) {
+        trail.setActive(false).setVisible(false)
+        this.missionOrbTrailStartedAt.delete(trail)
+      }
+    }
+  }
+
+  private createMissionOrbPools() {
+    for (let index = 0; index < missionVisuals.maxOrbAuras; index += 1) {
+      this.missionOrbAuraPool.push(
+        this.add
+          .circle(0, 0, tableLayout.ball.radius * 1.48, theme.jade, 0.055)
+          .setStrokeStyle(3, theme.agedGold, 0.56)
+          .setDepth(9.5)
+          .setActive(false)
+          .setVisible(false),
+      )
+    }
+
+    while (this.missionOrbTrailPool.length < missionVisuals.maxOrbTrails) {
+      this.missionOrbTrailPool.push(
+        this.add
+          .circle(0, 0, tableLayout.ball.radius * 0.76, theme.brightJade, 0.11)
+          .setStrokeStyle(1, theme.agedGold, 0.2)
+          .setDepth(9.25)
+          .setActive(false)
+          .setVisible(false),
+      )
+    }
+  }
+
+  private availableMissionOrbAura() {
+    for (const aura of this.missionOrbAuraPool) {
+      if (!aura.active) {
+        return aura
+      }
+    }
+    return undefined
+  }
+
+  private availableMissionOrbTrail() {
+    for (const trail of this.missionOrbTrailPool) {
+      if (!trail.active) {
+        return trail
+      }
+    }
+    return undefined
   }
 
   private presentMissionResult(success: boolean) {
     this.clearMissionOrbPresentation()
     this.fadeMissionPortal()
     this.lastMissionUrgencySecond = -1
+    this.missionTimerPulseStartedAt = 0
+    this.missionTimerText.setScale(1)
     this.missionBattlefieldTint?.setFillStyle(success ? theme.jade : theme.obsidian, success ? 0.12 : 0.34)
 
     const wash = this.add
@@ -3286,9 +3405,12 @@ export class PinballScene extends Phaser.Scene {
     this.missionBattlefieldOverlay = undefined
     this.missionBattlefieldTint = undefined
     this.lastMissionUrgencySecond = -1
+    this.missionTimerPulseStartedAt = 0
+    this.renderedMissionState = undefined
     if (this.missionUi) {
       this.killMissionContainerTweens(this.missionUi)
       this.missionUi.setAlpha(1).setScale(1)
+      this.missionTimerText.setScale(1)
     }
     this.missionUiWarningLamps.forEach((lamp) => lamp.setAlpha(0.84).setScale(1))
   }
@@ -3305,21 +3427,37 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private clearMissionOrbPresentation() {
-    this.missionOrbAuras.forEach((aura) => {
+    this.missionOrbAuraPool.forEach((aura) => {
       this.tweens.killTweensOf(aura)
-      if (aura.active) {
+      aura.setActive(false).setVisible(false)
+    })
+    this.missionOrbTrailPool.forEach((trail) => {
+      this.tweens.killTweensOf(trail)
+      trail.setActive(false).setVisible(false)
+    })
+    this.missionOrbAuras.clear()
+    this.missionOrbTrailStartedAt.clear()
+    this.lastMissionOrbTrailAt = 0
+    this.lastMissionOrbVisualUpdateAt = 0
+  }
+
+  private destroyMissionVisuals() {
+    this.clearMissionTargets()
+    this.clearMissionPresentation()
+    this.missionOrbAuraPool.forEach((aura) => {
+      this.tweens.killTweensOf(aura)
+      if (aura.scene) {
         aura.destroy()
       }
     })
-    this.missionOrbTrails.forEach((trail) => {
+    this.missionOrbTrailPool.forEach((trail) => {
       this.tweens.killTweensOf(trail)
-      if (trail.active) {
+      if (trail.scene) {
         trail.destroy()
       }
     })
-    this.missionOrbAuras.clear()
-    this.missionOrbTrails.clear()
-    this.lastMissionOrbTrailAt = 0
+    this.missionOrbAuraPool = []
+    this.missionOrbTrailPool = []
   }
 
   private killMissionContainerTweens(container: Phaser.GameObjects.Container) {
@@ -3340,7 +3478,7 @@ export class PinballScene extends Phaser.Scene {
         delay: index * 28,
         ease: 'Back.easeOut',
         onComplete: () => {
-          if (!visual.active) {
+          if (!visual.active || missionVisuals.reducedMotion) {
             return
           }
           this.tweens.add({
@@ -3374,13 +3512,14 @@ export class PinballScene extends Phaser.Scene {
     const aura = this.add
       .ellipse(0, 7, hitRadius * 2.42, hitRadius * 1.58, theme.ember, 0.105)
       .setStrokeStyle(4, theme.goldShadow, 0.9)
-    const silhouetteShadow = this.add.ellipse(4, 25, hitRadius * 1.8, 31, theme.ink, 0.72)
     const targetRing = this.add
       .ellipse(0, 6, hitRadius * 2.02, hitRadius * 1.22, theme.ink, 0.08)
       .setStrokeStyle(2, theme.brightJade, 0.5)
     const ship = this.add.graphics()
 
     // Deep hull with a raised stern and prow: broad shapes remain legible after mobile scaling.
+    ship.fillStyle(theme.ink, 0.72)
+    ship.fillEllipse(4, 25, hitRadius * 1.8, 31)
     ship.fillStyle(theme.ink, 0.98)
     ship.lineStyle(6, theme.ink, 0.98)
     ship.beginPath()
@@ -3469,12 +3608,11 @@ export class PinballScene extends Phaser.Scene {
     ship.lineTo(61, 38)
     ship.strokePath()
 
-    const targetingChevrons = this.add.graphics()
-    targetingChevrons.lineStyle(3, theme.ember, 0.72)
-    targetingChevrons.lineBetween(-78, -3, -70, 5)
-    targetingChevrons.lineBetween(-78, 13, -70, 5)
-    targetingChevrons.lineBetween(78, -3, 70, 5)
-    targetingChevrons.lineBetween(78, 13, 70, 5)
+    ship.lineStyle(3, theme.ember, 0.72)
+    ship.lineBetween(-78, -3, -70, 5)
+    ship.lineBetween(-78, 13, -70, 5)
+    ship.lineBetween(78, -3, 70, 5)
+    ship.lineBetween(78, 13, 70, 5)
     const label = this.add
       .text(0, 50, 'WAR GALLEON', {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -3486,7 +3624,7 @@ export class PinballScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
-    return this.add.container(0, 0, [aura, silhouetteShadow, targetRing, ship, targetingChevrons, label])
+    return this.add.container(0, 0, [aura, targetRing, ship, label])
   }
 
   private createMissionInvaderVisual(hitRadius: number) {
@@ -3496,79 +3634,78 @@ export class PinballScene extends Phaser.Scene {
     const targetRing = this.add
       .circle(0, 2, hitRadius * 0.98, theme.ink, 0.18)
       .setStrokeStyle(2, theme.brightJade, 0.5)
-    const hostileMarker = this.add.graphics()
-    hostileMarker.fillStyle(theme.eclipseRed, 0.22)
-    hostileMarker.lineStyle(2, theme.agedGold, 0.56)
-    hostileMarker.beginPath()
-    hostileMarker.moveTo(0, -39)
-    hostileMarker.lineTo(30, -20)
-    hostileMarker.lineTo(30, 20)
-    hostileMarker.lineTo(0, 39)
-    hostileMarker.lineTo(-30, 20)
-    hostileMarker.lineTo(-30, -20)
-    hostileMarker.closePath()
-    hostileMarker.fillPath()
-    hostileMarker.strokePath()
-    const standard = this.add.graphics()
-    standard.lineStyle(3, theme.goldShadow, 0.96)
-    standard.lineBetween(-27, -35, -27, 32)
-    standard.fillStyle(theme.eclipseRed, 0.98)
-    standard.lineStyle(2, theme.ember, 0.92)
-    standard.fillTriangle(-25, -33, -25, -9, -5, -21)
-    standard.strokeTriangle(-25, -33, -25, -9, -5, -21)
-    standard.lineStyle(2, theme.agedGold, 0.74)
-    standard.lineBetween(-23, -22, -10, -22)
-    standard.lineBetween(-17, -28, -17, -16)
-    const helmet = this.add.graphics()
-    helmet.fillStyle(theme.ink, 0.98)
-    helmet.lineStyle(6, theme.ink, 0.98)
-    helmet.fillRoundedRect(-18, -12, 36, 36, 8)
-    helmet.strokeRoundedRect(-18, -12, 36, 36, 8)
-    helmet.fillStyle(theme.obsidian, 1)
-    helmet.lineStyle(3, theme.agedGold, 0.96)
-    helmet.beginPath()
-    helmet.moveTo(-14, -10)
-    helmet.lineTo(-11, -25)
-    helmet.lineTo(-3, -32)
-    helmet.lineTo(3, -32)
-    helmet.lineTo(11, -25)
-    helmet.lineTo(14, -10)
-    helmet.closePath()
-    helmet.fillPath()
-    helmet.strokePath()
-    helmet.fillStyle(theme.charcoal, 1)
-    helmet.lineStyle(3, theme.goldShadow, 0.96)
-    helmet.fillRoundedRect(-22, -13, 44, 9, 4)
-    helmet.strokeRoundedRect(-22, -13, 44, 9, 4)
-    helmet.fillStyle(theme.eclipseRed, 0.96)
-    helmet.lineStyle(2, theme.ember, 0.92)
-    helmet.fillTriangle(-5, -31, 5, -31, 0, -44)
-    helmet.strokeTriangle(-5, -31, 5, -31, 0, -44)
-    helmet.fillStyle(theme.obsidian, 1)
-    helmet.fillRect(-14, -3, 28, 18)
-    helmet.lineStyle(2, theme.goldShadow, 0.86)
-    helmet.lineBetween(-14, 4, 14, 4)
-    helmet.fillStyle(theme.brightJade, 0.94)
-    helmet.fillCircle(-6, 0, 2.5)
-    helmet.fillCircle(6, 0, 2.5)
-    helmet.fillStyle(theme.charcoal, 1)
-    helmet.lineStyle(3, theme.agedGold, 0.88)
-    helmet.beginPath()
-    helmet.moveTo(-17, 18)
-    helmet.lineTo(-25, 34)
-    helmet.lineTo(25, 34)
-    helmet.lineTo(17, 18)
-    helmet.closePath()
-    helmet.fillPath()
-    helmet.strokePath()
-    helmet.lineStyle(2, theme.ember, 0.8)
-    helmet.lineBetween(-7, 20, 0, 28)
-    helmet.lineBetween(7, 20, 0, 28)
-    const footing = this.add
-      .rectangle(0, 42, 44, 4, theme.brightJade, 0.72)
-      .setStrokeStyle(1, theme.agedGold, 0.82)
+    const invader = this.add.graphics()
+    invader.fillStyle(theme.eclipseRed, 0.22)
+    invader.lineStyle(2, theme.agedGold, 0.56)
+    invader.beginPath()
+    invader.moveTo(0, -39)
+    invader.lineTo(30, -20)
+    invader.lineTo(30, 20)
+    invader.lineTo(0, 39)
+    invader.lineTo(-30, 20)
+    invader.lineTo(-30, -20)
+    invader.closePath()
+    invader.fillPath()
+    invader.strokePath()
+    invader.lineStyle(3, theme.goldShadow, 0.96)
+    invader.lineBetween(-27, -35, -27, 32)
+    invader.fillStyle(theme.eclipseRed, 0.98)
+    invader.lineStyle(2, theme.ember, 0.92)
+    invader.fillTriangle(-25, -33, -25, -9, -5, -21)
+    invader.strokeTriangle(-25, -33, -25, -9, -5, -21)
+    invader.lineStyle(2, theme.agedGold, 0.74)
+    invader.lineBetween(-23, -22, -10, -22)
+    invader.lineBetween(-17, -28, -17, -16)
+    invader.fillStyle(theme.ink, 0.98)
+    invader.lineStyle(6, theme.ink, 0.98)
+    invader.fillRoundedRect(-18, -12, 36, 36, 8)
+    invader.strokeRoundedRect(-18, -12, 36, 36, 8)
+    invader.fillStyle(theme.obsidian, 1)
+    invader.lineStyle(3, theme.agedGold, 0.96)
+    invader.beginPath()
+    invader.moveTo(-14, -10)
+    invader.lineTo(-11, -25)
+    invader.lineTo(-3, -32)
+    invader.lineTo(3, -32)
+    invader.lineTo(11, -25)
+    invader.lineTo(14, -10)
+    invader.closePath()
+    invader.fillPath()
+    invader.strokePath()
+    invader.fillStyle(theme.charcoal, 1)
+    invader.lineStyle(3, theme.goldShadow, 0.96)
+    invader.fillRoundedRect(-22, -13, 44, 9, 4)
+    invader.strokeRoundedRect(-22, -13, 44, 9, 4)
+    invader.fillStyle(theme.eclipseRed, 0.96)
+    invader.lineStyle(2, theme.ember, 0.92)
+    invader.fillTriangle(-5, -31, 5, -31, 0, -44)
+    invader.strokeTriangle(-5, -31, 5, -31, 0, -44)
+    invader.fillStyle(theme.obsidian, 1)
+    invader.fillRect(-14, -3, 28, 18)
+    invader.lineStyle(2, theme.goldShadow, 0.86)
+    invader.lineBetween(-14, 4, 14, 4)
+    invader.fillStyle(theme.brightJade, 0.94)
+    invader.fillCircle(-6, 0, 2.5)
+    invader.fillCircle(6, 0, 2.5)
+    invader.fillStyle(theme.charcoal, 1)
+    invader.lineStyle(3, theme.agedGold, 0.88)
+    invader.beginPath()
+    invader.moveTo(-17, 18)
+    invader.lineTo(-25, 34)
+    invader.lineTo(25, 34)
+    invader.lineTo(17, 18)
+    invader.closePath()
+    invader.fillPath()
+    invader.strokePath()
+    invader.lineStyle(2, theme.ember, 0.8)
+    invader.lineBetween(-7, 20, 0, 28)
+    invader.lineBetween(7, 20, 0, 28)
+    invader.fillStyle(theme.brightJade, 0.72)
+    invader.fillRect(-22, 40, 44, 4)
+    invader.lineStyle(1, theme.agedGold, 0.82)
+    invader.strokeRect(-22, 40, 44, 4)
 
-    return this.add.container(0, 0, [aura, targetRing, hostileMarker, standard, helmet, footing])
+    return this.add.container(0, 0, [aura, targetRing, invader])
   }
 
   private updateMissionTargets() {
@@ -3582,11 +3719,15 @@ export class PinballScene extends Phaser.Scene {
       }
 
       const collisionRadius = target.definition.hitRadius + tableLayout.ball.radius
-      const hit = this.balls.some((ball) => {
+      let hit = false
+      for (const ball of this.balls) {
         const offsetX = ball.image.x - target.definition.x
         const offsetY = ball.image.y - target.definition.y
-        return offsetX * offsetX + offsetY * offsetY <= collisionRadius * collisionRadius
-      })
+        if (offsetX * offsetX + offsetY * offsetY <= collisionRadius * collisionRadius) {
+          hit = true
+          break
+        }
+      }
 
       if (hit) {
         this.destroyMissionTarget(target)
@@ -3659,28 +3800,15 @@ export class PinballScene extends Phaser.Scene {
   }
 
   private createMissionDestructionPulse(x: number, y: number, radius: number) {
+    if (this.missionTransientEffects.size >= missionVisuals.maxDestructionEffects) {
+      return
+    }
+
     const coreFlash = this.add
       .circle(x, y, radius * 0.58, theme.ivory, 0.9)
       .setStrokeStyle(4, theme.agedGold, 1)
       .setDepth(9.45)
-    const emberFlash = this.add
-      .circle(x, y, radius * 0.82, theme.ember, 0.34)
-      .setStrokeStyle(4, theme.eclipseRed, 0.94)
-      .setDepth(9.35)
-    const pulse = this.add
-      .circle(x, y, radius * 0.76, theme.jade, 0.16)
-      .setStrokeStyle(5, theme.agedGold, 0.96)
-      .setDepth(9.25)
-    const defeatMark = this.add.graphics().setPosition(x, y).setDepth(9.3).setScale(0.72)
-    defeatMark.lineStyle(5, theme.ivory, 0.9)
-    defeatMark.lineBetween(-radius * 0.42, -radius * 0.42, radius * 0.42, radius * 0.42)
-    defeatMark.lineBetween(radius * 0.42, -radius * 0.42, -radius * 0.42, radius * 0.42)
-    defeatMark.lineStyle(2, theme.ember, 0.96)
-    defeatMark.strokeCircle(0, 0, radius * 0.58)
     this.missionTransientEffects.add(coreFlash)
-    this.missionTransientEffects.add(emberFlash)
-    this.missionTransientEffects.add(pulse)
-    this.missionTransientEffects.add(defeatMark)
     this.tweens.add({
       targets: coreFlash,
       scaleX: 1.72,
@@ -3693,47 +3821,31 @@ export class PinballScene extends Phaser.Scene {
         coreFlash.destroy()
       },
     })
-    this.tweens.add({
-      targets: emberFlash,
-      scaleX: 1.62,
-      scaleY: 1.62,
-      alpha: 0,
-      duration: 220,
-      ease: 'Sine.easeOut',
-      onComplete: () => {
-        this.missionTransientEffects.delete(emberFlash)
-        emberFlash.destroy()
-      },
-    })
-    this.tweens.add({
-      targets: pulse,
-      scaleX: 2.35,
-      scaleY: 2.35,
-      alpha: 0,
-      duration: 430,
-      ease: 'Sine.easeOut',
-      onComplete: () => {
-        this.missionTransientEffects.delete(pulse)
-        pulse.destroy()
-      },
-    })
-    this.tweens.add({
-      targets: defeatMark,
-      scaleX: 1.28,
-      scaleY: 1.28,
-      alpha: 0,
-      angle: 22,
-      duration: 460,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        this.missionTransientEffects.delete(defeatMark)
-        defeatMark.destroy()
-      },
-    })
+
+    if (this.missionTransientEffects.size < missionVisuals.maxDestructionEffects) {
+      const pulse = this.add
+        .circle(x, y, radius * 0.76, theme.jade, 0.14)
+        .setStrokeStyle(4, theme.agedGold, 0.9)
+        .setDepth(9.25)
+      this.missionTransientEffects.add(pulse)
+      this.tweens.add({
+        targets: pulse,
+        scaleX: 2,
+        scaleY: 2,
+        alpha: 0,
+        duration: 360,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          this.missionTransientEffects.delete(pulse)
+          pulse.destroy()
+        },
+      })
+    }
   }
 
   private createMissionDestructionShards(definition: Readonly<InvasionTargetDefinition>) {
-    const shardCount = definition.type === 'ship' ? 7 : 5
+    const availableSlots = Math.max(0, missionVisuals.maxDestructionEffects - this.missionTransientEffects.size)
+    const shardCount = Math.min(definition.type === 'ship' ? 4 : 3, availableSlots)
     for (let index = 0; index < shardCount; index += 1) {
       const angle = -2.7 + (Math.PI * 2 * index) / shardCount
       const travel = (definition.type === 'ship' ? 76 : 50) + (index % 3) * 8
@@ -4229,7 +4341,7 @@ export class PinballScene extends Phaser.Scene {
     const missionAura = this.missionOrbAuras.get(ball.id)
     if (missionAura) {
       this.tweens.killTweensOf(missionAura)
-      missionAura.destroy()
+      missionAura.setActive(false).setVisible(false)
       this.missionOrbAuras.delete(ball.id)
     }
     this.collisionBodies = this.collisionBodies.filter((body) => body !== ball.body)
@@ -4288,6 +4400,8 @@ export class PinballScene extends Phaser.Scene {
     }
 
     this.ballState = state
+    this.renderedBallNumber = this.currentBall
+    this.renderedBallState = state
     this.ballStateText?.setText(this.ballHudLabel())
   }
 
